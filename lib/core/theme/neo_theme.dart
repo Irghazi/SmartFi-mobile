@@ -76,6 +76,13 @@ class NeoTheme {
         thickness: 2,
         space: 1,
       ),
+      snackBarTheme: const SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        contentTextStyle: TextStyle(
+          color: NeoColors.textLight,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 
@@ -91,18 +98,33 @@ class NeoTheme {
         onPrimary: NeoColors.textLight,
         secondary: NeoColors.warningYellow,
         surface: NeoColors.surfaceDark,
+        onSurface: NeoColors.textLight,
         error: NeoColors.dangerRed,
       ),
       textTheme: baseTextTheme.copyWith(
         displayLarge: baseTextTheme.displayLarge?.copyWith(
           color: NeoColors.textLight,
           fontWeight: FontWeight.w900,
+          letterSpacing: -1.0,
+        ),
+        displayMedium: baseTextTheme.displayMedium?.copyWith(
+          color: NeoColors.textLight,
+          fontWeight: FontWeight.w900,
+          letterSpacing: -0.5,
+        ),
+        headlineLarge: baseTextTheme.headlineLarge?.copyWith(
+          color: NeoColors.textLight,
+          fontWeight: FontWeight.w800,
         ),
         headlineMedium: baseTextTheme.headlineMedium?.copyWith(
           color: NeoColors.textLight,
           fontWeight: FontWeight.w800,
         ),
         titleLarge: baseTextTheme.titleLarge?.copyWith(
+          color: NeoColors.textLight,
+          fontWeight: FontWeight.w700,
+        ),
+        titleMedium: baseTextTheme.titleMedium?.copyWith(
           color: NeoColors.textLight,
           fontWeight: FontWeight.w700,
         ),
@@ -113,6 +135,11 @@ class NeoTheme {
         bodyMedium: baseTextTheme.bodyMedium?.copyWith(
           color: NeoColors.textLight,
           fontWeight: FontWeight.w500,
+        ),
+        labelLarge: baseTextTheme.labelLarge?.copyWith(
+          color: NeoColors.textLight,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.5,
         ),
       ),
       appBarTheme: AppBarTheme(
@@ -127,9 +154,16 @@ class NeoTheme {
         iconTheme: const IconThemeData(color: NeoColors.white),
       ),
       dividerTheme: const DividerThemeData(
-        color: NeoColors.white,
+        color: Color(0xFFA1A1AA),
         thickness: 2,
         space: 1,
+      ),
+      snackBarTheme: const SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        contentTextStyle: TextStyle(
+          color: NeoColors.textLight,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

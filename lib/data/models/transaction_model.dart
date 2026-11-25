@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class TransactionModel {
   final String id;
   final String userId;
@@ -68,6 +70,21 @@ class TransactionModel {
   }
 
   factory TransactionModel.fromJson(Map<String, dynamic> json) {
+    DateTime parseDate(dynamic value, [DateTime? defaultVal]) {
+      if (value is Timestamp) return value.toDate();
+      if (value is String) return DateTime.tryParse(value) ?? (defaultVal ?? DateTime.now());
+      if (value is DateTime) return value;
+      return defaultVal ?? DateTime.now();
+    }
+
+    DateTime? parseNullableDate(dynamic value) {
+      if (value == null) return null;
+      if (value is Timestamp) return value.toDate();
+      if (value is String) return DateTime.tryParse(value);
+      if (value is DateTime) return value;
+      return null;
+    }
+
     // Menangani kompatibilitas nominal atau amount dari schema web
     final rawNominal = json['nominal'] ?? json['amount'];
     final nominalVal = (rawNominal is num)
@@ -75,14 +92,10 @@ class TransactionModel {
         : int.tryParse(rawNominal?.toString() ?? '0') ?? 0;
 
     final rawTxDate = json['transactionDate'] ?? json['transaction_date'] ?? json['created_at'];
-    final txDate = rawTxDate != null
-        ? DateTime.tryParse(rawTxDate.toString()) ?? DateTime.now()
-        : DateTime.now();
+    final txDate = parseDate(rawTxDate);
 
     final rawCreatedAt = json['createdAt'] ?? json['created_at'];
-    final createdAt = rawCreatedAt != null
-        ? DateTime.tryParse(rawCreatedAt.toString()) ?? DateTime.now()
-        : DateTime.now();
+    final createdAt = parseDate(rawCreatedAt);
 
     return TransactionModel(
       id: json['id'] as String? ?? 'tx_${DateTime.now().millisecondsSinceEpoch}',
@@ -94,9 +107,7 @@ class TransactionModel {
       categoryName: json['categoryName'] as String? ?? json['category'] as String? ?? 'Lainnya',
       transactionDate: txDate,
       createdAt: createdAt,
-      updatedAt: json['updatedAt'] != null
-          ? DateTime.tryParse(json['updatedAt'] as String)
-          : null,
+      updatedAt: parseNullableDate(json['updatedAt']),
     );
   }
 }

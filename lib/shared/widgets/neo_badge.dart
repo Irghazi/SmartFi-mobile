@@ -35,13 +35,17 @@ class NeoBadge extends StatelessWidget {
             icon!,
             const SizedBox(width: 4),
           ],
-          Text(
-            text.toUpperCase(),
-            style: TextStyle(
-              color: textColor,
-              fontWeight: FontWeight.w900,
-              fontSize: fontSize,
-              letterSpacing: 0.5,
+          Flexible(
+            child: Text(
+              text.toUpperCase(),
+              style: TextStyle(
+                color: textColor,
+                fontWeight: FontWeight.w900,
+                fontSize: fontSize,
+                letterSpacing: 0.5,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

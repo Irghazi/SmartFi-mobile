@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/services/audio_service.dart';
 import '../../../core/theme/neo_colors.dart';
@@ -7,6 +8,7 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/transaction_model.dart';
 import '../../../shared/widgets/neo_button.dart';
 import '../../../shared/widgets/neo_input.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../transactions/providers/transaction_provider.dart';
 
 /// Modal onboarding untuk mengisi saldo awal (minimal Rp 100.000)
@@ -76,9 +78,15 @@ class _InitialBalanceDialogState extends ConsumerState<InitialBalanceDialog> {
 
     try {
       final now = DateTime.now();
+      final user = ref.read(authStateProvider).asData?.value;
+      final userId = user?.id;
+      if (userId == null) {
+        throw Exception('Sesi pengguna tidak ditemukan. Silakan masuk kembali.');
+      }
+
       final tx = TransactionModel(
         id: 'tx_init_${now.millisecondsSinceEpoch}',
-        userId: 'default_user',
+        userId: userId,
         type: 'income',
         nominal: _rawValue,
         categoryName: 'Saldo Awal',
@@ -88,14 +96,20 @@ class _InitialBalanceDialogState extends ConsumerState<InitialBalanceDialog> {
       );
 
       await ref.read(transactionsProvider.notifier).addTransaction(tx);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('smartfi_onboarding_completed_$userId', true);
+
       if (mounted) {
         Navigator.of(context).pop();
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Gagal menyimpan saldo awal: $e';
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Gagal menyimpan saldo awal: ${e.toString().replaceFirst('Exception: ', '')}';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -108,6 +122,9 @@ class _InitialBalanceDialogState extends ConsumerState<InitialBalanceDialog> {
   @override
   Widget build(BuildContext context) {
     final isValid = _rawValue >= 100000;
+    final borderCol = NeoColors.border(context);
+    final textCol = NeoColors.text(context);
+    final mutedCol = NeoColors.mutedText(context);
 
     return PopScope(
       canPop: false,
@@ -117,103 +134,105 @@ class _InitialBalanceDialogState extends ConsumerState<InitialBalanceDialog> {
         child: Container(
           constraints: const BoxConstraints(maxWidth: 440),
           decoration: BoxDecoration(
-            color: NeoColors.surfaceLight,
-            border: Border.all(color: NeoColors.black, width: 4),
+            color: NeoColors.surface(context),
+            border: Border.all(color: borderCol, width: 4),
             boxShadow: NeoColors.hardShadow(offset: 8),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: const BoxDecoration(
-                  color: NeoColors.bgLight,
-                  border: Border(
-                    bottom: BorderSide(color: NeoColors.black, width: 4),
+          child: DefaultTextStyle.merge(
+            style: TextStyle(color: textCol),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: NeoColors.headerBg(context),
+                    border: Border(
+                      bottom: BorderSide(color: borderCol, width: 4),
+                    ),
+                  ),
+                  child: Text(
+                    'SALDO AWAL',
+                    style: TextStyle(
+                      color: textCol,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                      letterSpacing: 0.5,
+                    ),
                   ),
                 ),
-                child: const Text(
-                  'SALDO AWAL',
-                  style: TextStyle(
-                    color: NeoColors.textDark,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
 
-              // Konten Modal
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 64,
-                        height: 64,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: NeoColors.black, width: 2),
-                          color: NeoColors.white,
-                          boxShadow: NeoColors.hardShadow(offset: 4),
+                // Konten Modal (scrollable agar aman saat keyboard terbuka)
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 64,
+                            height: 64,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: NeoColors.black, width: 2),
+                              color: NeoColors.white,
+                              boxShadow: NeoColors.hardShadow(offset: 4),
+                            ),
+                            padding: const EdgeInsets.all(8),
+                            child: Image.asset(
+                              'assets/images/logo.png',
+                              fit: BoxFit.contain,
+                            ),
+                          ),
                         ),
-                        padding: const EdgeInsets.all(8),
-                        child: Image.asset(
-                          'assets/images/logo.png',
-                          fit: BoxFit.contain,
+                        const Text(
+                          'SELAMAT DATANG DI SMARTFI!',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15,
+                            letterSpacing: 0.3,
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Mari mulai dengan mengatur saldo awal Anda agar kami bisa melacak keuangan Anda dengan akurat.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: mutedCol,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        NeoInput(
+                          label: 'Saldo Awal (Rp)',
+                          controller: _controller,
+                          hintText: 'Contoh: 100.000',
+                          keyboardType: TextInputType.number,
+                          errorText: _errorMessage,
+                          onChanged: _onAmountChanged,
+                        ),
+                        const SizedBox(height: 20),
+                        NeoButton(
+                          text: _isLoading
+                              ? 'MENYIMPAN...'
+                              : 'MULAI GUNAKAN SMARTFI',
+                          variant: NeoButtonVariant.primary,
+                          onPressed: isValid && !_isLoading ? _handleSubmit : null,
+                        ),
+                      ],
                     ),
-                    const Text(
-                      'SELAMAT DATANG DI SMARTFI!',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 15,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Mari mulai dengan mengatur saldo awal Anda agar kami bisa melacak keuangan Anda dengan akurat.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: NeoColors.textMuted,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    NeoInput(
-                      label: 'Saldo Awal (Rp)',
-                      controller: _controller,
-                      hintText: 'Contoh: 100.000',
-                      keyboardType: TextInputType.number,
-                      errorText: _errorMessage,
-                      onChanged: _onAmountChanged,
-                    ),
-                    const SizedBox(height: 20),
-                    NeoButton(
-                      text: _isLoading
-                          ? 'MENYIMPAN...'
-                          : 'MULAI GUNAKAN SMARTFI',
-                      backgroundColor: isValid
-                          ? NeoColors.primaryBlue
-                          : Colors.grey.shade400,
-                      textColor: NeoColors.white,
-                      onPressed: isValid && !_isLoading ? _handleSubmit : null,
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

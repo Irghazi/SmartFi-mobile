@@ -36,6 +36,42 @@ class NeoColors {
   static const Color textMuted = Color(0xFF475569);
   static const Color textDisabled = Color(0xFF9CA3AF);
 
+  // Border & Shadow helpers (Dark Mode aware)
+  static bool isDark(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark;
+
+  static Color surface(BuildContext context) =>
+      isDark(context) ? surfaceDark : surfaceLight;
+
+  static Color surfaceSecondary(BuildContext context) =>
+      isDark(context) ? const Color(0xFF3F3F46) : bgLight;
+
+  static Color headerBg(BuildContext context) =>
+      isDark(context) ? const Color(0xFF3F3F46) : bgLight;
+
+  static Color disabledSurface(BuildContext context) =>
+      isDark(context) ? const Color(0xFF3F3F46) : const Color(0xFFE5E7EB);
+
+  static Color border(BuildContext context) =>
+      isDark(context) ? const Color(0xFFA1A1AA) : black;
+
+  static Color shadow(BuildContext context) => black;
+
+  static Color text(BuildContext context) =>
+      isDark(context) ? textLight : textDark;
+
+  static Color mutedText(BuildContext context) =>
+      isDark(context) ? const Color(0xFFD4D4D8) : textMuted;
+
+  static Color incomeText(BuildContext context) =>
+      isDark(context) ? const Color(0xFF34D399) : successGreen;
+
+  static Color expenseText(BuildContext context) =>
+      isDark(context) ? const Color(0xFFF87171) : dangerRed;
+
+  static Color blueAccentText(BuildContext context) =>
+      isDark(context) ? const Color(0xFF60A5FA) : primaryBlue;
+
   // Border & Shadow BoxShadow helper
   static List<BoxShadow> hardShadow({
     double offset = 4.0,

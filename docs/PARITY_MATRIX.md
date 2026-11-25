@@ -4,9 +4,8 @@ Dokumen ini memetakan seluruh fitur, logika, fungsi, dan tampilan dari aplikasi 
 
 > **Prinsip Utama:**
 > - Seluruh fitur, perhitungan, validasi, dan estetika Neobrutalism dipertahankan 100%.
-> - Backend menggunakan Firebase (Auth, Cloud Firestore), dengan layer Repository dummy offline-first terlebih dahulu sehingga aplikasi dapat berjalan dan diuji langsung di HP tanpa konfigurasi Firebase awal.
-> - Implementasi Firebase murni disediakan di file terpisah (belum diaktifkan).
-> - Tidak ada API key di dalam kode sumber.
+> - Backend aktif menggunakan Firebase (Auth, Cloud Firestore dengan *offline persistence*), disertai mekanisme fallback otomatis ke Dummy Repository (`SharedPreferences`) bila Firebase belum terinisialisasi.
+> - Tidak ada API key atau kredensial yang di-hardcode di dalam kode sumber (menggunakan `env.json` dan `.gitignore`).
 
 ---
 
@@ -78,7 +77,7 @@ Dokumen ini memetakan seluruh fitur, logika, fungsi, dan tampilan dari aplikasi 
 | 9.9 | Navigasi Kelola Kategori & Tombol Keluar | `src/app/dashboard/settings/page.js` | `lib/features/settings/screens/settings_screen.dart` | Selesai | Akses cepat ke Manajemen Kategori dan tombol Logout akun. |
 | **10** | **Arsitektur Data & Kesiapan Backend** | | | | |
 | 10.1 | Model Data (User, Category, Transaction) | `scripts/schema.sql`, `PROJECT_CONTEXT.txt` | `lib/data/models/` | Selesai | Definisi objek Dart dengan serialisasi JSON & Firestore converter. |
-| 10.2 | Dummy Repositories (Offline-Ready) | - | `lib/data/repositories/dummy/` | Selesai | Implementasi in-memory & SharedPreferences agar aplikasi langsung jalan 100% tanpa konfigurasi Firebase. |
-| 10.3 | Firebase Repositories (Standby / Belum Diaktifkan) | `PLANNING_SMARTFI_MOBILE.txt` (Bagian 6 & 7) | `lib/data/repositories/firebase/` | Selesai | Kode Firebase Auth & Cloud Firestore siap pakai di file terpisah, tanpa memanggil initializeApp. |
+| 10.2 | Dummy Repositories (Fallback Offline & Test) | - | `lib/data/repositories/dummy/` | Selesai | Implementasi berbasis `SharedPreferences` sebagai fallback otomatis bila Firebase belum terinisialisasi & untuk pengujian. |
+| 10.3 | Firebase Repositories (Aktif) | `PLANNING_SMARTFI_MOBILE.txt` (Bagian 6 & 7) | `lib/data/repositories/firebase/` | Selesai | Firebase Auth (Email & Google) dan Cloud Firestore dengan *offline persistence* sudah aktif dan terhubung ke provider. |
 | 10.4 | Firestore Security Rules & Indexes | `PLANNING_SMARTFI_MOBILE.txt` (Bagian 6.4) | `firebase/firestore.rules`, `firestore.indexes.json` | Selesai | Aturan keamanan Cloud Firestore subkoleksi `users/{uid}`. |
 

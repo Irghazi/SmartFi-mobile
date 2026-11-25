@@ -46,9 +46,13 @@ class NeoButton extends StatefulWidget {
 class _NeoButtonState extends State<NeoButton> {
   bool _isPressed = false;
 
-  Color _getBgColor() {
+  Color _getBgColor(BuildContext context) {
+    if (widget.onPressed == null || widget.isLoading) {
+      return NeoColors.isDark(context)
+          ? const Color(0xFF3F3F46)
+          : const Color(0xFFD1D5DB);
+    }
     if (widget.backgroundColor != null) return widget.backgroundColor!;
-    if (widget.onPressed == null || widget.isLoading) return const Color(0xFFD1D5DB); // Gray 300
 
     switch (widget.variant) {
       case NeoButtonVariant.primary:
@@ -62,22 +66,27 @@ class _NeoButtonState extends State<NeoButton> {
       case NeoButtonVariant.success:
         return NeoColors.successGreen;
       case NeoButtonVariant.outline:
-        return NeoColors.surfaceLight;
+        return NeoColors.surface(context);
     }
   }
 
-  Color _getTextColor() {
+  Color _getTextColor(BuildContext context) {
     if (widget.textColor != null) return widget.textColor!;
-    if (widget.onPressed == null || widget.isLoading) return const Color(0xFF6B7280);
+    if (widget.onPressed == null || widget.isLoading) {
+      return NeoColors.isDark(context)
+          ? const Color(0xFFA1A1AA)
+          : const Color(0xFF6B7280);
+    }
 
     switch (widget.variant) {
       case NeoButtonVariant.primary:
       case NeoButtonVariant.danger:
         return NeoColors.textLight;
+      case NeoButtonVariant.outline:
+        return NeoColors.text(context);
       case NeoButtonVariant.secondary:
       case NeoButtonVariant.warning:
       case NeoButtonVariant.success:
-      case NeoButtonVariant.outline:
         return NeoColors.textDark;
     }
   }
@@ -89,6 +98,11 @@ class _NeoButtonState extends State<NeoButton> {
     final translation = (_isPressed && !isDisabled)
         ? Offset(widget.shadowOffset, widget.shadowOffset)
         : Offset.zero;
+    final textColor = _getTextColor(context);
+    final bgColor = _getBgColor(context);
+    final borderCol = widget.variant == NeoButtonVariant.outline
+        ? NeoColors.border(context)
+        : NeoColors.black;
 
     Widget content = Row(
       mainAxisSize: widget.isFullWidth ? MainAxisSize.max : MainAxisSize.min,
@@ -100,17 +114,21 @@ class _NeoButtonState extends State<NeoButton> {
             height: 18,
             child: CircularProgressIndicator(
               strokeWidth: 2.5,
-              valueColor: AlwaysStoppedAnimation<Color>(_getTextColor()),
+              valueColor: AlwaysStoppedAnimation<Color>(textColor),
             ),
           ),
           const SizedBox(width: 8),
-          Text(
-            'Memproses...',
-            style: TextStyle(
-              color: _getTextColor(),
-              fontWeight: FontWeight.w900,
-              fontSize: 14,
-              letterSpacing: 0.5,
+          Flexible(
+            child: Text(
+              'Memproses...',
+              style: TextStyle(
+                color: textColor,
+                fontWeight: FontWeight.w900,
+                fontSize: 14,
+                letterSpacing: 0.5,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ] else ...[
@@ -123,7 +141,7 @@ class _NeoButtonState extends State<NeoButton> {
               widget.text.toUpperCase(),
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: _getTextColor(),
+                color: textColor,
                 fontWeight: FontWeight.w900,
                 fontSize: 14,
                 letterSpacing: 0.5,
@@ -153,14 +171,14 @@ class _NeoButtonState extends State<NeoButton> {
           width: widget.isFullWidth ? double.infinity : null,
           padding: widget.padding,
           decoration: BoxDecoration(
-            color: _getBgColor(),
+            color: bgColor,
             border: Border.all(
-              color: NeoColors.black,
+              color: borderCol,
               width: widget.borderWidth,
             ),
             boxShadow: NeoColors.hardShadow(
               offset: currentOffset,
-              color: NeoColors.black,
+              color: NeoColors.shadow(context),
             ),
           ),
           child: content,

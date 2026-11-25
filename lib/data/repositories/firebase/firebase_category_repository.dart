@@ -8,21 +8,22 @@ class FirebaseCategoryRepository implements CategoryRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  String _resolveUserId(String passedUserId) {
+  String? _resolveUserId(String passedUserId) {
     if (passedUserId.isNotEmpty && passedUserId != 'default_user') {
       return passedUserId;
     }
-    return _auth.currentUser?.uid ?? 'anonymous_user';
+    return _auth.currentUser?.uid;
   }
 
   @override
   Future<List<CategoryModel>> getCategories(String userId) async {
     final uid = _resolveUserId(userId);
+    if (uid == null) return [];
+
     final col = _firestore.collection('users').doc(uid).collection('categories');
     final snapshot = await col.orderBy('createdAt', descending: false).get();
 
     if (snapshot.docs.isEmpty) {
-      // Fallback jika belum ter-seed
       await seedDefaultCategories(uid);
       final refetched = await col.orderBy('createdAt', descending: false).get();
       return refetched.docs.map((doc) {
@@ -40,6 +41,9 @@ class FirebaseCategoryRepository implements CategoryRepository {
   @override
   Future<CategoryModel> addCategory(CategoryModel category) async {
     final uid = _resolveUserId(category.userId);
+    if (uid == null) {
+      throw Exception('Sesi login tidak ditemukan. Silakan masuk kembali.');
+    }
     final col = _firestore.collection('users').doc(uid).collection('categories');
     final docRef = col.doc();
 
@@ -61,11 +65,11 @@ class FirebaseCategoryRepository implements CategoryRepository {
   @override
   Future<void> updateCategory(CategoryModel category) async {
     final uid = _resolveUserId(category.userId);
-    final docRef = _firestore
-        .collection('users')
-        .doc(uid)
-        .collection('categories')
-        .doc(category.id);
+    if (uid == null) {
+      throw Exception('Sesi login tidak ditemukan. Silakan masuk kembali.');
+    }
+    final userDoc = _firestore.collection('users').doc(uid);
+    final docRef = userDoc.collection('categories').doc(category.id);
 
     final data = {
       'name': category.name,
@@ -76,19 +80,49 @@ class FirebaseCategoryRepository implements CategoryRepository {
     };
 
     await docRef.update(data);
+
+    // Sinkronkan nama kategori pada transaksi terkait agar grafik dan riwayat tetap akurat
+    try {
+      final txSnap = await userDoc
+          .collection('transactions')
+          .where('categoryId', isEqualTo: category.id)
+          .get();
+
+      if (txSnap.docs.isNotEmpty) {
+        const batchLimit = 500;
+        for (int i = 0; i < txSnap.docs.length; i += batchLimit) {
+          final end = (i + batchLimit < txSnap.docs.length)
+              ? i + batchLimit
+              : txSnap.docs.length;
+          final batch = _firestore.batch();
+          for (final doc in txSnap.docs.sublist(i, end)) {
+            batch.update(doc.reference, {'categoryName': category.name});
+          }
+          await batch.commit();
+        }
+      }
+    } catch (_) {}
   }
 
   @override
   Future<void> deleteCategory(String categoryId) async {
     final uid = _auth.currentUser?.uid;
-    if (uid == null) return;
+    if (uid == null) {
+      throw Exception('Sesi login tidak ditemukan. Silakan masuk kembali.');
+    }
 
-    await _firestore
+    final docRef = _firestore
         .collection('users')
         .doc(uid)
         .collection('categories')
-        .doc(categoryId)
-        .delete();
+        .doc(categoryId);
+
+    final snapshot = await docRef.get();
+    if (snapshot.exists && snapshot.data()?['isDefault'] == true) {
+      throw Exception('Kategori bawaan tidak dapat dihapus.');
+    }
+
+    await docRef.delete();
   }
 
   Future<void> seedDefaultCategories(String userId) async {
@@ -98,9 +132,9 @@ class FirebaseCategoryRepository implements CategoryRepository {
 
     final batch = _firestore.batch();
     for (final defCat in CategoryModel.defaultCategories) {
-      final docRef = col.doc();
+      final docRef = col.doc(defCat.id);
       final data = {
-        'id': docRef.id,
+        'id': defCat.id,
         'userId': userId,
         'name': defCat.name,
         'type': defCat.type,
@@ -109,7 +143,7 @@ class FirebaseCategoryRepository implements CategoryRepository {
         'isDefault': true,
         'createdAt': FieldValue.serverTimestamp(),
       };
-      batch.set(docRef, data);
+      batch.set(docRef, data, SetOptions(merge: true));
     }
     await batch.commit();
   }

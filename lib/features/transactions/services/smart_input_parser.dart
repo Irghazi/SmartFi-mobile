@@ -62,25 +62,67 @@ class SmartInputParser {
       return (val * 1000).round();
     }
 
-    // Pola angka langsung berpemisah titik atau tidak: misal Rp 50.000 atau 50000
-    final rawNumberRegex = RegExp(r'(?:rp\.?\s*)?(\d{1,3}(?:\.\d{3})+|\d{4,})', caseSensitive: false);
+    // Pola angka dengan awalan Rp (bisa 3 digit seperti Rp 500) atau angka >= 4 digit / bertitik
+    final rpNumberRegex = RegExp(r'rp\.?\s*(\d{1,3}(?:\.\d{3})*|\d+)', caseSensitive: false);
+    final rpMatch = rpNumberRegex.firstMatch(text);
+    if (rpMatch != null) {
+      final clean = rpMatch.group(1)!.replaceAll('.', '');
+      return int.tryParse(clean) ?? 0;
+    }
+
+    // Pola angka berpemisah ribuan lebih diprioritaskan agar tahun 4-digit tidak mengalahkan nominal: misal "2026 50.000"
+    final dottedRegex = RegExp(r'\b(\d{1,3}(?:[.,]\d{3})+)\b', caseSensitive: false);
+    final dottedMatch = dottedRegex.firstMatch(text);
+    if (dottedMatch != null) {
+      final clean = dottedMatch.group(1)!.replaceAll(RegExp(r'[.,]'), '');
+      return int.tryParse(clean) ?? 0;
+    }
+
+    // Pola angka murni minimal 3 digit: misal 50000 atau 500
+    final rawNumberRegex = RegExp(r'\b(\d{3,})\b', caseSensitive: false);
     final rawMatch = rawNumberRegex.firstMatch(text);
     if (rawMatch != null) {
-      final clean = rawMatch.group(1)!.replaceAll('.', '');
-      return int.tryParse(clean) ?? 0;
+      return int.tryParse(rawMatch.group(1)!) ?? 0;
     }
 
     return 0;
   }
 
+  static bool _containsKeyword(String text, String keyword) {
+    final pattern = RegExp(
+      r'(?:^|\b)' + RegExp.escape(keyword) + r'(?:\b|$)',
+      caseSensitive: false,
+    );
+    return pattern.hasMatch(text);
+  }
+
   static String _extractType(String text) {
+    final expenseStrongKeywords = [
+      'beli', 'bayar', 'belanja', 'jajan', 'makan', 'minum', 'ongkir', 'bensin',
+      'parkir', 'tagihan', 'cicilan', 'obat', 'dokter', 'keluar', 'habis', 'sewa',
+    ];
+    for (final kw in expenseStrongKeywords) {
+      if (_containsKeyword(text, kw)) {
+        // Pengecualian eksplisit jika memang transfer/uang masuk gaji
+        if (_containsKeyword(text, 'gaji') ||
+            _containsKeyword(text, 'bonus') ||
+            _containsKeyword(text, 'thr') ||
+            _containsKeyword(text, 'honor') ||
+            _containsKeyword(text, 'cashback')) {
+          return 'income';
+        }
+        return 'expense';
+      }
+    }
+
     final incomeKeywords = [
-      'gaji', 'bonus', 'terima', 'masuk', 'dapat', 'penjualan', 'profit',
-      'cair', 'thr', 'honor', 'transfer masuk', 'upah', 'dividen', 'cashback'
+      'gaji', 'bonus', 'terima', 'dapat', 'penjualan', 'profit',
+      'cair', 'thr', 'honor', 'transfer masuk', 'uang masuk', 'pemasukan',
+      'upah', 'dividen', 'cashback', 'gajian',
     ];
 
     for (final kw in incomeKeywords) {
-      if (text.contains(kw)) {
+      if (_containsKeyword(text, kw)) {
         return 'income';
       }
     }
@@ -88,43 +130,41 @@ class SmartInputParser {
   }
 
   static String _extractCategory(String text, String type, List<CategoryModel> categories) {
-    if (type == 'income') {
-      final incomeCats = categories.where((c) => c.isIncome).map((c) => c.name).toList();
-      for (final cat in incomeCats) {
-        if (text.contains(cat.toLowerCase())) return cat;
+    final matchingTypeCats = categories.where((c) => c.type == type).toList();
+
+    // 1. Cek kecocokan langsung terhadap nama kategori milik pengguna (sesuai tipe)
+    for (final cat in matchingTypeCats) {
+      if (_containsKeyword(text, cat.name.toLowerCase())) {
+        return cat.name;
       }
-      return incomeCats.isNotEmpty ? incomeCats.first : 'Gaji';
     }
 
-    // Pemetaan kata kunci ke kategori pengeluaran
-    final keywordMap = {
-      'Makanan': ['makan', 'minum', 'siang', 'malam', 'sarapan', 'warteg', 'resto', 'cafe', 'kopi', 'jajan', 'ayam', 'nasi', 'grabfood', 'gofood', 'kuliner', 'bakso', 'mie'],
-      'Transportasi': ['bensin', 'bbm', 'pertalite', 'pertamax', 'ojol', 'gojek', 'grab', 'taksi', 'kereta', 'krl', 'bus', 'tol', 'parkir', 'service motor', 'tambal ban'],
-      'Tagihan': ['listrik', 'pln', 'pdam', 'pulsa', 'kuota', 'wifi', 'indihome', 'internet', 'kos', 'bpjs', 'air', 'sewa'],
+    if (type == 'income') {
+      return matchingTypeCats.isNotEmpty ? matchingTypeCats.first.name : 'Gaji';
+    }
+
+    // 2. Pemetaan kata kunci ke kandidat kategori pengeluaran (berurutan prioritas)
+    final keywordCandidates = <String, List<String>>{
+      'Transportasi': ['bensin', 'bbm', 'pertalite', 'pertamax', 'ojol', 'gojek', 'grab', 'taksi', 'kereta', 'krl', 'bus', 'tol', 'parkir', 'service motor', 'tambal ban', 'transport'],
+      'Hiburan': ['nonton', 'bioskop', 'film', 'game', 'netflix', 'spotify', 'karaoke', 'liburan', 'wisata', 'healing', 'hiburan'],
+      'Tagihan': ['listrik', 'pln', 'pdam', 'pulsa', 'kuota', 'wifi', 'indihome', 'internet', 'kos', 'bpjs', 'tagihan', 'sewa'],
       'Belanja': ['belanja', 'minimarket', 'indomaret', 'alfamart', 'mall', 'baju', 'sepatu', 'shopee', 'tokopedia', 'lazada', 'tiktok shop', 'pasar'],
-      'Hiburan': ['nonton', 'bioskop', 'film', 'game', 'netflix', 'spotify', 'karaoke', 'liburan', 'wisata', 'healing', 'jalan'],
       'Kesehatan': ['obat', 'dokter', 'apotek', 'rumah sakit', 'klinik', 'vitamin', 'medis'],
+      'Makanan': ['makan', 'minum', 'siang', 'malam', 'sarapan', 'warteg', 'resto', 'cafe', 'kopi', 'jajan', 'ayam', 'nasi', 'grabfood', 'gofood', 'kuliner', 'bakso', 'mie', 'snack'],
     };
 
-    for (final entry in keywordMap.entries) {
-      for (final kw in entry.value) {
-        if (text.contains(kw)) {
-          // Cari apakah kategori ini ada di daftar user
-          final match = categories.firstWhere(
-            (c) => c.name.toLowerCase() == entry.key.toLowerCase(),
-            orElse: () => categories.firstWhere(
-              (c) => c.isExpense,
-              orElse: () => CategoryModel.defaultCategories.first,
-            ),
-          );
-          return match.name;
-        }
+    for (final entry in keywordCandidates.entries) {
+      final matchedKw = entry.value.any((kw) => _containsKeyword(text, kw));
+      if (matchedKw) {
+        final existing = matchingTypeCats.where(
+          (c) => c.name.toLowerCase() == entry.key.toLowerCase(),
+        );
+        if (existing.isNotEmpty) return existing.first.name;
       }
     }
 
     // Default ke kategori pengeluaran pertama jika ada
-    final expenseCats = categories.where((c) => c.isExpense).toList();
-    if (expenseCats.isNotEmpty) return expenseCats.first.name;
+    if (matchingTypeCats.isNotEmpty) return matchingTypeCats.first.name;
 
     return 'Makanan';
   }

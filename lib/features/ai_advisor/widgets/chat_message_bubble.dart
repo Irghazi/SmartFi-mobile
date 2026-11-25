@@ -22,20 +22,24 @@ class ChatMessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUser = message.isUser;
+    final isError = message.isError;
+    final surfaceCol = NeoColors.surface(context);
+    final borderCol = isError ? NeoColors.dangerRed : (isUser ? NeoColors.black : NeoColors.border(context));
+    final textCol = isUser ? NeoColors.textDark : NeoColors.text(context);
+    final bubbleColor = isUser ? NeoColors.yellowAccent : surfaceCol;
+    final codeBg = isUser ? const Color(0xFFFEF08A) : NeoColors.surfaceSecondary(context);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
-        mainAxisAlignment: isUser
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Avatar AI
           if (!isUser) ...[
             Container(
-              width: 36,
-              height: 36,
+              width: 34,
+              height: 34,
               margin: const EdgeInsets.only(right: 8, top: 2),
               decoration: BoxDecoration(
                 color: NeoColors.white,
@@ -50,9 +54,7 @@ class ChatMessageBubble extends StatelessWidget {
           // Area Bubble
           Flexible(
             child: Column(
-              crossAxisAlignment: isUser
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
+              crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 Container(
                   constraints: BoxConstraints(
@@ -63,46 +65,62 @@ class ChatMessageBubble extends StatelessWidget {
                     vertical: 12,
                   ),
                   decoration: BoxDecoration(
-                    color: isUser ? NeoColors.yellowAccent : NeoColors.white,
-                    border: Border.all(color: NeoColors.black, width: 2),
+                    color: bubbleColor,
+                    border: Border.all(color: borderCol, width: 2),
                     boxShadow: NeoColors.hardShadow(offset: 4),
                   ),
                   child: message.content.trim().isEmpty
-                      ? const _BouncingDotsIndicator()
+                      ? _BouncingDotsIndicator(dotColor: textCol)
                       : MarkdownBody(
                           data: message.content,
                           selectable: true,
                           styleSheet: MarkdownStyleSheet(
-                            p: const TextStyle(
+                            p: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: NeoColors.black,
+                              color: isError ? NeoColors.expenseText(context) : textCol,
                               height: 1.4,
                             ),
-                            strong: const TextStyle(
+                            h1: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: textCol,
+                            ),
+                            h2: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: textCol,
+                            ),
+                            h3: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                              color: textCol,
+                            ),
+                            strong: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w900,
-                              color: NeoColors.black,
+                              color: textCol,
                             ),
-                            listBullet: const TextStyle(
+                            listBullet: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w900,
-                              color: NeoColors.black,
+                              color: textCol,
                             ),
-                            code: const TextStyle(
+                            code: TextStyle(
                               fontSize: 12,
-                              backgroundColor: Color(0xFFE5E7EB),
+                              color: textCol,
+                              backgroundColor: codeBg,
                               fontFamily: 'monospace',
                             ),
-                            blockquote: const TextStyle(
+                            blockquote: TextStyle(
                               fontStyle: FontStyle.italic,
-                              color: NeoColors.black,
+                              color: textCol,
                             ),
                             blockquoteDecoration: BoxDecoration(
-                              color: const Color(0xFFE5E7EB),
-                              border: const Border(
+                              color: codeBg,
+                              border: Border(
                                 left: BorderSide(
-                                  color: NeoColors.black,
+                                  color: borderCol,
                                   width: 4,
                                 ),
                               ),
@@ -111,7 +129,7 @@ class ChatMessageBubble extends StatelessWidget {
                         ),
                 ),
 
-                // Tombol Muat Ulang Respon (jika pesan AI terakhir)
+                // Tombol Muat Ulang / Coba Lagi
                 if (!isUser &&
                     isLastAiMessage &&
                     !isAiLoading &&
@@ -126,21 +144,22 @@ class ChatMessageBubble extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: NeoColors.white,
-                        border: Border.all(color: NeoColors.black, width: 2),
+                        color: surfaceCol,
+                        border: Border.all(color: NeoColors.border(context), width: 2),
                         boxShadow: NeoColors.hardShadow(offset: 2),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.refresh, size: 14, color: NeoColors.black),
-                          SizedBox(width: 4),
+                        children: [
+                          Icon(Icons.refresh, size: 14, color: NeoColors.text(context)),
+                          const SizedBox(width: 4),
                           Text(
-                            'MUAT ULANG RESPON',
+                            isError ? 'COBA LAGI' : 'MUAT ULANG RESPON',
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 0.3,
+                              color: NeoColors.text(context),
                             ),
                           ),
                         ],
@@ -159,7 +178,8 @@ class ChatMessageBubble extends StatelessWidget {
 
 /// 3 Bouncing Dots Neobrutalism
 class _BouncingDotsIndicator extends StatefulWidget {
-  const _BouncingDotsIndicator();
+  final Color dotColor;
+  const _BouncingDotsIndicator({this.dotColor = NeoColors.black});
 
   @override
   State<_BouncingDotsIndicator> createState() => _BouncingDotsIndicatorState();
@@ -203,8 +223,8 @@ class _BouncingDotsIndicatorState extends State<_BouncingDotsIndicator>
                 height: 8,
                 margin: const EdgeInsets.symmetric(horizontal: 3),
                 decoration: BoxDecoration(
-                  color: NeoColors.black,
-                  border: Border.all(color: NeoColors.black, width: 1),
+                  color: widget.dotColor,
+                  border: Border.all(color: widget.dotColor, width: 1),
                 ),
               ),
             );

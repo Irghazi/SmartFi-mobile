@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/neo_colors.dart';
 import '../../../data/models/transaction_model.dart';
 import '../../../shared/widgets/blueprint_background.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../transactions/providers/transaction_provider.dart';
 import '../widgets/category_pie_chart.dart';
 import '../widgets/expense_bar_chart.dart';
@@ -21,13 +23,18 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  bool _dialogChecked = false;
+  String? _checkedUserId;
 
-  void _checkInitialBalance(List<TransactionModel> transactions) {
-    if (_dialogChecked) return;
-    _dialogChecked = true;
+  Future<void> _checkInitialBalance(List<TransactionModel> transactions) async {
+    final user = ref.read(authStateProvider).asData?.value;
+    if (user == null) return;
+    if (_checkedUserId == user.id) return;
+    _checkedUserId = user.id;
 
-    if (transactions.isEmpty) {
+    final prefs = await SharedPreferences.getInstance();
+    final isCompleted = prefs.getBool('smartfi_onboarding_completed_${user.id}') ?? false;
+
+    if (transactions.isEmpty && !isCompleted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           InitialBalanceDialog.show(context);
@@ -40,22 +47,47 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget build(BuildContext context) {
     final transactionsAsync = ref.watch(transactionsProvider);
 
+    final textCol = NeoColors.text(context);
+    final mutedCol = NeoColors.mutedText(context);
+
     return BlueprintBackground(
       child: RefreshIndicator(
         color: NeoColors.primaryBlue,
-        backgroundColor: NeoColors.white,
+        backgroundColor: NeoColors.surface(context),
         onRefresh: () async {
-          await ref.read(transactionsProvider.notifier).loadTransactions();
+          await ref.read(transactionsProvider.notifier).loadTransactions(showLoading: false);
         },
         child: transactionsAsync.when(
-          loading: () => const Center(
-            child: CircularProgressIndicator(color: NeoColors.black),
+          loading: () => ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              SizedBox(
+                height: MediaQuery.of(context).size.height * 0.65,
+                child: Center(
+                  child: CircularProgressIndicator(color: textCol),
+                ),
+              ),
+            ],
           ),
-          error: (err, _) => Center(
-            child: Text(
-              'Gagal memuat data: $err',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
+          error: (err, _) => ListView(
+            padding: const EdgeInsets.all(24),
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              SizedBox(height: MediaQuery.of(context).size.height * 0.2),
+              Icon(Icons.cloud_off, size: 48, color: mutedCol),
+              const SizedBox(height: 12),
+              Text(
+                'Gagal memuat data dashboard.\nTarik ke bawah atau tekan Coba Lagi.\n($err)',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontWeight: FontWeight.w700, color: textCol),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () => ref.read(transactionsProvider.notifier).loadTransactions(),
+                icon: const Icon(Icons.refresh),
+                label: const Text('COBA LAGI'),
+              ),
+            ],
           ),
           data: (transactions) {
             _checkInitialBalance(transactions);
@@ -91,29 +123,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'DASHBOARD UTAMA',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.5,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'DASHBOARD UTAMA',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.5,
+                              color: textCol,
+                            ),
                           ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'RINGKASAN FINANSIAL ANDA',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: NeoColors.textMuted,
-                            letterSpacing: 0.5,
+                          const SizedBox(height: 2),
+                          Text(
+                            'RINGKASAN FINANSIAL ANDA',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: mutedCol,
+                              letterSpacing: 0.5,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+                    const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
@@ -126,6 +162,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w900,
+                          color: NeoColors.textDark,
                         ),
                       ),
                     ),

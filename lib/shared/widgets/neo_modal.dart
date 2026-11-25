@@ -18,14 +18,17 @@ class NeoModal {
       barrierDismissible: barrierDismissible,
       barrierColor: const Color(0x99000000),
       builder: (BuildContext dialogContext) {
+        final borderCol = NeoColors.border(dialogContext);
+        final textCol = NeoColors.text(dialogContext);
+
         return Dialog(
           backgroundColor: Colors.transparent,
           insetPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
           child: Container(
             constraints: const BoxConstraints(maxWidth: 500),
             decoration: BoxDecoration(
-              color: NeoColors.surfaceLight,
-              border: Border.all(color: NeoColors.black, width: 4.0),
+              color: NeoColors.surface(dialogContext),
+              border: Border.all(color: borderCol, width: 4.0),
               boxShadow: NeoColors.hardShadow(offset: 8.0),
             ),
             child: Column(
@@ -35,10 +38,10 @@ class NeoModal {
                 // Header Neobrutalism
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                  decoration: const BoxDecoration(
-                    color: NeoColors.bgLight,
+                  decoration: BoxDecoration(
+                    color: NeoColors.headerBg(dialogContext),
                     border: Border(
-                      bottom: BorderSide(color: NeoColors.black, width: 4.0),
+                      bottom: BorderSide(color: borderCol, width: 4.0),
                     ),
                   ),
                   child: Row(
@@ -47,8 +50,8 @@ class NeoModal {
                       Expanded(
                         child: Text(
                           title.toUpperCase(),
-                          style: const TextStyle(
-                            color: NeoColors.textDark,
+                          style: TextStyle(
+                            color: textCol,
                             fontWeight: FontWeight.w900,
                             fontSize: 16.0,
                             letterSpacing: 0.5,
@@ -57,6 +60,7 @@ class NeoModal {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      const SizedBox(width: 8),
                       GestureDetector(
                         onTap: () {
                           AudioService().playClickSound();
@@ -84,7 +88,10 @@ class NeoModal {
                 Flexible(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(20.0),
-                    child: child,
+                    child: DefaultTextStyle.merge(
+                      style: TextStyle(color: textCol),
+                      child: child,
+                    ),
                   ),
                 ),
               ],

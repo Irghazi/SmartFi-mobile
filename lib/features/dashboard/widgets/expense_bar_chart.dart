@@ -35,18 +35,37 @@ class ExpenseBarChart extends StatelessWidget {
       dailyExpenses.add(dayExpense);
     }
 
-    final maxVal = dailyExpenses.fold<int>(100000, (max, v) => v > max ? v : max);
+    final highestExpense = dailyExpenses.fold<int>(0, (max, v) => v > max ? v : max);
+    final maxVal = highestExpense == 0 ? 100000 : (highestExpense < 1000 ? 1000 : highestExpense);
+    final chartMaxY = maxVal * 1.2;
+    final yInterval = chartMaxY / 4;
+    final textCol = NeoColors.text(context);
+    final borderCol = NeoColors.border(context);
+    final gridColor = NeoColors.isDark(context) ? const Color(0xFF3F3F46) : const Color(0xFFE5E7EB);
+
+    String formatYAxis(double val) {
+      if (val <= 0) return '0';
+      if (val >= 1000000) {
+        final jt = val / 1000000;
+        return jt == jt.roundToDouble() ? '${jt.toInt()}jt' : '${jt.toStringAsFixed(1)}jt';
+      }
+      if (val >= 1000) {
+        return '${(val / 1000).round()}k';
+      }
+      return val.toInt().toString();
+    }
 
     return NeoCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'TREN PENGELUARAN 7 HARI TERAKHIR',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w900,
               letterSpacing: 0.5,
+              color: textCol,
             ),
           ),
           const SizedBox(height: 16),
@@ -54,16 +73,16 @@ class ExpenseBarChart extends StatelessWidget {
             height: 180,
             child: BarChart(
               BarChartData(
-                maxY: maxVal * 1.2,
+                maxY: chartMaxY,
                 barTouchData: BarTouchData(
                   touchTooltipData: BarTouchTooltipData(
-                    getTooltipColor: (_) => NeoColors.surfaceLight,
+                    getTooltipColor: (_) => NeoColors.surface(context),
                     getTooltipItem: (group, groupIndex, rod, rodIndex) {
                       final dayStr = DateFormatter.formatTanggalPendek(last7Days[group.x.toInt()]);
                       return BarTooltipItem(
                         '$dayStr\n${CurrencyFormatter.formatRupiah(rod.toY.toInt())}',
-                        const TextStyle(
-                          color: NeoColors.textDark,
+                        TextStyle(
+                          color: textCol,
                           fontWeight: FontWeight.w800,
                           fontSize: 11,
                         ),
@@ -75,11 +94,16 @@ class ExpenseBarChart extends StatelessWidget {
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 48,
+                      reservedSize: 44,
+                      interval: yInterval,
                       getTitlesWidget: (val, meta) {
-                        if (val == 0) return const Text('0', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800));
-                        final k = (val / 1000).toInt();
-                        return Text('${k}k', style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800));
+                        if (val > chartMaxY * 0.99 && val != chartMaxY) {
+                          return const SizedBox.shrink();
+                        }
+                        return Text(
+                          formatYAxis(val),
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: textCol),
+                        );
                       },
                     ),
                   ),
@@ -88,14 +112,16 @@ class ExpenseBarChart extends StatelessWidget {
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
+                      interval: 1,
                       getTitlesWidget: (val, meta) {
+                        if (val % 1 != 0) return const SizedBox.shrink();
                         final idx = val.toInt();
                         if (idx >= 0 && idx < last7Days.length) {
                           return Padding(
                             padding: const EdgeInsets.only(top: 6.0),
                             child: Text(
                               DateFormatter.formatTanggalPendek(last7Days[idx]),
-                              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900),
+                              style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: textCol),
                             ),
                           );
                         }
@@ -107,13 +133,14 @@ class ExpenseBarChart extends StatelessWidget {
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
-                  getDrawingHorizontalLine: (_) => const FlLine(color: Color(0xFFE5E7EB), strokeWidth: 1),
+                  horizontalInterval: yInterval,
+                  getDrawingHorizontalLine: (_) => FlLine(color: gridColor, strokeWidth: 1),
                 ),
                 borderData: FlBorderData(
                   show: true,
-                  border: const Border(
-                    bottom: BorderSide(color: NeoColors.black, width: 2),
-                    left: BorderSide(color: NeoColors.black, width: 2),
+                  border: Border(
+                    bottom: BorderSide(color: borderCol, width: 2),
+                    left: BorderSide(color: borderCol, width: 2),
                   ),
                 ),
                 barGroups: List.generate(7, (i) {
@@ -125,7 +152,7 @@ class ExpenseBarChart extends StatelessWidget {
                         color: NeoColors.primaryBlue,
                         width: 18,
                         borderRadius: BorderRadius.zero,
-                        borderSide: const BorderSide(color: NeoColors.black, width: 2),
+                        borderSide: BorderSide(color: borderCol, width: 2),
                       ),
                     ],
                   );

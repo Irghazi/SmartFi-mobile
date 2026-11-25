@@ -5,7 +5,9 @@ import '../../../core/services/audio_service.dart';
 import '../../../core/theme/neo_colors.dart';
 import '../../../shared/widgets/blueprint_background.dart';
 import '../../../shared/widgets/neo_button.dart';
+import '../../../shared/widgets/neo_modal.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../widgets/app_update_card.dart';
 import '../widgets/audio_settings_card.dart';
 import '../widgets/balance_correction_card.dart';
 import '../widgets/danger_zone_card.dart';
@@ -22,116 +24,55 @@ class SettingsScreen extends ConsumerWidget {
   Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
     AudioService().playClickSound();
 
-    final confirm = await showDialog<bool>(
+    final confirm = await NeoModal.show<bool>(
       context: context,
-      barrierColor: const Color(0x99000000),
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Container(
-          decoration: BoxDecoration(
-            color: NeoColors.surfaceLight,
-            border: Border.all(color: NeoColors.black, width: 4),
-            boxShadow: NeoColors.hardShadow(offset: 8),
+      title: 'Konfirmasi Keluar',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Apakah Anda yakin ingin keluar dari akun SmartFi ini?',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              height: 1.4,
+            ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          const SizedBox(height: 20),
+          Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: const BoxDecoration(
-                  color: NeoColors.bgLight,
-                  border: Border(
-                    bottom: BorderSide(color: NeoColors.black, width: 4),
-                  ),
-                ),
-                child: const Text(
-                  'KONFIRMASI KELUAR',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                  ),
+              Expanded(
+                child: NeoButton(
+                  text: 'Batal',
+                  variant: NeoButtonVariant.outline,
+                  onPressed: () => Navigator.of(context).pop(false),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Apakah Anda yakin ingin keluar dari akun SmartFi ini?',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        height: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: InkWell(
-                            onTap: () => Navigator.of(ctx).pop(false),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: NeoColors.white,
-                                border: Border.all(color: NeoColors.black, width: 2),
-                                boxShadow: NeoColors.hardShadow(offset: 2),
-                              ),
-                              alignment: Alignment.center,
-                              child: const Text(
-                                'BATAL',
-                                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: InkWell(
-                            onTap: () => Navigator.of(ctx).pop(true),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: NeoColors.dangerRed,
-                                border: Border.all(color: NeoColors.black, width: 2),
-                                boxShadow: NeoColors.hardShadow(offset: 2),
-                              ),
-                              alignment: Alignment.center,
-                              child: const Text(
-                                'KELUAR',
-                                style: TextStyle(
-                                  color: NeoColors.white,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: NeoButton(
+                  text: 'Keluar',
+                  variant: NeoButtonVariant.danger,
+                  onPressed: () => Navigator.of(context).pop(true),
                 ),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
 
     if (confirm == true) {
       await ref.read(authControllerProvider.notifier).logout();
-      if (context.mounted) {
-        context.go('/login');
-      }
     }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final textCol = NeoColors.text(context);
+    final mutedCol = NeoColors.mutedText(context);
+    final borderCol = NeoColors.border(context);
+
     return BlueprintBackground(
       child: ListView(
         padding: const EdgeInsets.all(16),
@@ -143,35 +84,38 @@ class SettingsScreen extends ConsumerWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: NeoColors.white,
-                  border: Border.all(color: NeoColors.black, width: 2),
+                  color: NeoColors.surface(context),
+                  border: Border.all(color: borderCol, width: 2),
                   boxShadow: NeoColors.hardShadow(offset: 3),
                 ),
-                child: const Icon(Icons.settings, size: 24, color: NeoColors.black),
+                child: Icon(Icons.settings, size: 24, color: textCol),
               ),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'PENGATURAN',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.5,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'PENGATURAN',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
+                        color: textCol,
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'KELOLA PROFIL, TARGET, DAN PREFERENSI',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: NeoColors.textMuted,
-                      letterSpacing: 0.3,
+                    const SizedBox(height: 2),
+                    Text(
+                      'KELOLA PROFIL, TARGET, DAN PREFERENSI',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: mutedCol,
+                        letterSpacing: 0.3,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -205,16 +149,19 @@ class SettingsScreen extends ConsumerWidget {
           const SubscriptionInfoCard(),
           const SizedBox(height: 16),
 
-          // 8. Zona Bahaya
+          // 8. Pembaruan Aplikasi (Auto-Update Firebase)
+          const AppUpdateCard(),
+          const SizedBox(height: 16),
+
+          // 9. Zona Bahaya
           const DangerZoneCard(),
           const SizedBox(height: 24),
 
           // Tombol Navigasi Kelola Kategori
           NeoButton(
             text: 'KELOLA KATEGORI TRANSAKSI',
-            icon: const Icon(Icons.category, size: 18, color: NeoColors.black),
-            backgroundColor: NeoColors.white,
-            textColor: NeoColors.black,
+            variant: NeoButtonVariant.outline,
+            icon: Icon(Icons.category, size: 18, color: textCol),
             onPressed: () {
               context.push('/categories');
             },

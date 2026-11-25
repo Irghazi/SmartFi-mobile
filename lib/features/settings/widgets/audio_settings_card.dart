@@ -13,6 +13,10 @@ class AudioSettingsCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
+    final textCol = NeoColors.text(context);
+    final mutedCol = NeoColors.mutedText(context);
+    final borderCol = NeoColors.border(context);
+    final secondaryCol = NeoColors.surfaceSecondary(context);
 
     return NeoCard(
       child: Column(
@@ -24,38 +28,40 @@ class AudioSettingsCard extends ConsumerWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: NeoColors.bgLight,
-                  border: Border.all(color: NeoColors.black, width: 2),
+                  color: NeoColors.headerBg(context),
+                  border: Border.all(color: borderCol, width: 2),
                   boxShadow: NeoColors.hardShadow(offset: 2),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.volume_up,
-                  color: NeoColors.black,
+                  color: textCol,
                   size: 20,
                 ),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'KONTROL EFEK SUARA',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.5,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'KONTROL EFEK SUARA',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
                     ),
-                  ),
-                  Text(
-                    'ATUR SUARA KLIK DAN OBROLAN AI',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      color: NeoColors.textMuted,
-                      letterSpacing: 0.3,
+                    Text(
+                      'ATUR SUARA KLIK DAN OBROLAN AI',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: mutedCol,
+                        letterSpacing: 0.3,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -65,29 +71,31 @@ class AudioSettingsCard extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: NeoColors.white,
-              border: Border.all(color: NeoColors.black, width: 2),
+              color: secondaryCol,
+              border: Border.all(color: borderCol, width: 2),
               boxShadow: NeoColors.hardShadow(offset: 2),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'BISUKAN SUARA KLIK',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'BISUKAN SUARA KLIK',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
-                    ),
-                    Text(
-                      'Menonaktifkan suara saat menekan tombol',
-                      style: TextStyle(fontSize: 9, color: NeoColors.textMuted),
-                    ),
-                  ],
+                      Text(
+                        'Menonaktifkan suara saat menekan tombol',
+                        style: TextStyle(fontSize: 9, color: mutedCol),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Switch(
                   value: settings.isClickMuted,
                   activeTrackColor: NeoColors.primaryBlueLight,
@@ -106,29 +114,31 @@ class AudioSettingsCard extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: NeoColors.white,
-              border: Border.all(color: NeoColors.black, width: 2),
+              color: secondaryCol,
+              border: Border.all(color: borderCol, width: 2),
               boxShadow: NeoColors.hardShadow(offset: 2),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'BISUKAN SUARA CHAT AI',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'BISUKAN SUARA CHAT AI',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
-                    ),
-                    Text(
-                      'Menonaktifkan bunyi saat pesan AI tiba',
-                      style: TextStyle(fontSize: 9, color: NeoColors.textMuted),
-                    ),
-                  ],
+                      Text(
+                        'Menonaktifkan bunyi saat pesan AI tiba',
+                        style: TextStyle(fontSize: 9, color: mutedCol),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Switch(
                   value: settings.isAiMuted,
                   activeTrackColor: NeoColors.primaryBlueLight,

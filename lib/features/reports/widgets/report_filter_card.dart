@@ -14,6 +14,7 @@ class ReportFilterCard extends StatelessWidget {
   final ValueChanged<DateTime?> onEndDateChanged;
   final ValueChanged<String> onReportTypeChanged;
   final VoidCallback onSearch;
+  final VoidCallback? onReset;
 
   const ReportFilterCard({
     super.key,
@@ -24,6 +25,7 @@ class ReportFilterCard extends StatelessWidget {
     required this.onEndDateChanged,
     required this.onReportTypeChanged,
     required this.onSearch,
+    this.onReset,
   });
 
   Future<void> _selectDate(BuildContext context, bool isStart) async {
@@ -31,6 +33,7 @@ class ReportFilterCard extends StatelessWidget {
     final initialDate = isStart
         ? (startDate ?? DateTime.now())
         : (endDate ?? DateTime.now());
+    final isDark = NeoColors.isDark(context);
 
     final picked = await showDatePicker(
       context: context,
@@ -39,13 +42,20 @@ class ReportFilterCard extends StatelessWidget {
       lastDate: DateTime(2035),
       builder: (context, child) {
         return Theme(
-          data: ThemeData.light().copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: NeoColors.primaryBlue,
-              onPrimary: NeoColors.white,
-              surface: NeoColors.surfaceLight,
-              onSurface: NeoColors.black,
-            ),
+          data: (isDark ? ThemeData.dark() : ThemeData.light()).copyWith(
+            colorScheme: isDark
+                ? const ColorScheme.dark(
+                    primary: NeoColors.primaryBlue,
+                    onPrimary: NeoColors.white,
+                    surface: NeoColors.surfaceDark,
+                    onSurface: NeoColors.textLight,
+                  )
+                : const ColorScheme.light(
+                    primary: NeoColors.primaryBlue,
+                    onPrimary: NeoColors.white,
+                    surface: NeoColors.surfaceLight,
+                    onSurface: NeoColors.black,
+                  ),
           ),
           child: child!,
         );
@@ -63,17 +73,51 @@ class ReportFilterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surfaceCol = NeoColors.surfaceSecondary(context);
+    final borderCol = NeoColors.border(context);
+    final textCol = NeoColors.text(context);
+    final hasActiveFilter = startDate != null || endDate != null || reportType != 'all';
+
     return NeoCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'FILTER LAPORAN',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.5,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Expanded(
+                child: Text(
+                  'FILTER LAPORAN',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              if (hasActiveFilter && onReset != null)
+                GestureDetector(
+                  onTap: () {
+                    AudioService().playClickSound();
+                    onReset!();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: NeoColors.dangerRedLight,
+                      border: Border.all(color: NeoColors.black, width: 1.5),
+                    ),
+                    child: const Text(
+                      'RESET',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        color: NeoColors.textDark,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 14),
 
@@ -98,22 +142,23 @@ class ReportFilterCard extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                         decoration: BoxDecoration(
-                          color: NeoColors.white,
-                          border: Border.all(color: NeoColors.black, width: 2),
+                          color: surfaceCol,
+                          border: Border.all(color: borderCol, width: 2),
                           boxShadow: NeoColors.hardShadow(offset: 2),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.calendar_today, size: 14, color: NeoColors.black),
+                            Icon(Icons.calendar_today, size: 14, color: textCol),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
                                 startDate != null
                                     ? DateFormatter.formatDate(startDate!)
                                     : 'Pilih Tanggal',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
+                                  color: textCol,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -145,22 +190,23 @@ class ReportFilterCard extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                         decoration: BoxDecoration(
-                          color: NeoColors.white,
-                          border: Border.all(color: NeoColors.black, width: 2),
+                          color: surfaceCol,
+                          border: Border.all(color: borderCol, width: 2),
                           boxShadow: NeoColors.hardShadow(offset: 2),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.calendar_today, size: 14, color: NeoColors.black),
+                            Icon(Icons.calendar_today, size: 14, color: textCol),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
                                 endDate != null
                                     ? DateFormatter.formatDate(endDate!)
                                     : 'Pilih Tanggal',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
+                                  color: textCol,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -193,19 +239,20 @@ class ReportFilterCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: NeoColors.white,
-                  border: Border.all(color: NeoColors.black, width: 2),
+                  color: surfaceCol,
+                  border: Border.all(color: borderCol, width: 2),
                   boxShadow: NeoColors.hardShadow(offset: 2),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: reportType,
                     isExpanded: true,
-                    icon: const Icon(Icons.keyboard_arrow_down, color: NeoColors.black),
-                    style: const TextStyle(
+                    dropdownColor: NeoColors.surface(context),
+                    icon: Icon(Icons.keyboard_arrow_down, color: textCol),
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: NeoColors.black,
+                      color: textCol,
                     ),
                     items: const [
                       DropdownMenuItem(

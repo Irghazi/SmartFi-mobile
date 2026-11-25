@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 class CategoryModel {
@@ -60,17 +61,21 @@ class CategoryModel {
   }
 
   factory CategoryModel.fromJson(Map<String, dynamic> json) {
+    DateTime parseDate(dynamic value) {
+      if (value is Timestamp) return value.toDate();
+      if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
+      return DateTime.now();
+    }
+
     return CategoryModel(
-      id: json['id'] as String,
+      id: json['id'] as String? ?? 'cat_${DateTime.now().millisecondsSinceEpoch}',
       userId: json['userId'] as String? ?? '',
-      name: json['name'] as String,
+      name: json['name'] as String? ?? '',
       type: json['type'] as String? ?? 'expense',
       iconName: json['iconName'] as String? ?? 'Wallet',
       colorHex: json['colorHex'] as String? ?? '#3B82F6',
       isDefault: json['isDefault'] as bool? ?? false,
-      createdAt: json['createdAt'] != null
-          ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
-          : DateTime.now(),
+      createdAt: parseDate(json['createdAt']),
     );
   }
 

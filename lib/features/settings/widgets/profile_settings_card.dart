@@ -19,6 +19,7 @@ class _ProfileSettingsCardState extends ConsumerState<ProfileSettingsCard> {
   final TextEditingController _emailController = TextEditingController();
   bool _isLoading = false;
   bool _isInit = false;
+  String? _lastUserId;
 
   @override
   void didChangeDependencies() {
@@ -26,6 +27,7 @@ class _ProfileSettingsCardState extends ConsumerState<ProfileSettingsCard> {
     if (!_isInit) {
       final user = ref.read(authStateProvider).asData?.value;
       if (user != null) {
+        _lastUserId = user.id;
         _nameController.text = user.name;
         _emailController.text = user.email;
       }
@@ -42,7 +44,15 @@ class _ProfileSettingsCardState extends ConsumerState<ProfileSettingsCard> {
 
   Future<void> _handleSave() async {
     final newName = _nameController.text.trim();
-    if (newName.isEmpty) return;
+    if (newName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nama lengkap tidak boleh kosong.'),
+          backgroundColor: NeoColors.warningYellow,
+        ),
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {
@@ -59,7 +69,7 @@ class _ProfileSettingsCardState extends ConsumerState<ProfileSettingsCard> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gagal memperbarui profil: $e'),
+            content: Text('Gagal memperbarui profil: ${e.toString().replaceFirst('Exception: ', '')}'),
             backgroundColor: NeoColors.dangerRed,
           ),
         );
@@ -71,6 +81,21 @@ class _ProfileSettingsCardState extends ConsumerState<ProfileSettingsCard> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(authStateProvider, (_, next) {
+      final user = next.asData?.value;
+      if (user != null) {
+        if (_lastUserId != user.id || _nameController.text.isEmpty) {
+          _lastUserId = user.id;
+          _nameController.text = user.name;
+        }
+        _emailController.text = user.email;
+      }
+    });
+
+    final textCol = NeoColors.text(context);
+    final mutedCol = NeoColors.mutedText(context);
+    final borderCol = NeoColors.border(context);
+
     return NeoCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -81,34 +106,36 @@ class _ProfileSettingsCardState extends ConsumerState<ProfileSettingsCard> {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: NeoColors.bgLight,
-                  border: Border.all(color: NeoColors.black, width: 2),
+                  color: NeoColors.headerBg(context),
+                  border: Border.all(color: borderCol, width: 2),
                   boxShadow: NeoColors.hardShadow(offset: 2),
                 ),
-                child: const Icon(Icons.person, color: NeoColors.black, size: 20),
+                child: Icon(Icons.person, color: textCol, size: 20),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'PROFIL PENGGUNA',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.5,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'PROFIL PENGGUNA',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
                     ),
-                  ),
-                  Text(
-                    'INFORMASI DASAR AKUN ANDA',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      color: NeoColors.textMuted,
-                      letterSpacing: 0.3,
+                    Text(
+                      'INFORMASI DASAR AKUN ANDA',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: mutedCol,
+                        letterSpacing: 0.3,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/neo_colors.dart';
+import '../../../core/utils/validators.dart';
 import '../../../shared/widgets/blueprint_background.dart';
 import '../../../shared/widgets/neo_button.dart';
 import '../../../shared/widgets/neo_card.dart';
@@ -19,8 +20,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  String? _nameError;
+  String? _emailError;
+  String? _passwordError;
   String? _errorMessage;
-  String? _successMessage;
+  bool _obscurePassword = true;
   bool _isLoading = false;
 
   @override
@@ -32,37 +36,45 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   bool get _isFormFilled =>
+      _nameController.text.trim().isNotEmpty &&
       _emailController.text.trim().isNotEmpty &&
       _passwordController.text.trim().isNotEmpty;
 
   Future<void> _handleRegister() async {
-    if (!_isFormFilled) return;
+    final nameErr = Validators.validateRequired(_nameController.text, 'Nama lengkap');
+    final emailErr = Validators.validateEmail(_emailController.text);
+    final passErr = Validators.validatePassword(_passwordController.text);
+
+    if (nameErr != null || emailErr != null || passErr != null) {
+      setState(() {
+        _nameError = nameErr;
+        _emailError = emailErr;
+        _passwordError = passErr;
+        _errorMessage = null;
+      });
+      return;
+    }
+
     setState(() {
+      _nameError = null;
+      _emailError = null;
+      _passwordError = null;
       _errorMessage = null;
-      _successMessage = null;
       _isLoading = true;
     });
 
     try {
-      final repo = ref.read(authRepositoryProvider);
-      await repo.signUp(
+      await ref.read(authControllerProvider.notifier).register(
         _nameController.text.trim(),
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
+    } catch (e) {
       if (mounted) {
         setState(() {
-          _successMessage = 'Pendaftaran berhasil! Mengalihkan ke dashboard...';
+          _errorMessage = e.toString().replaceFirst('Exception: ', '');
         });
-        await Future.delayed(const Duration(milliseconds: 600));
-        if (mounted) {
-          context.go('/dashboard');
-        }
       }
-    } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-      });
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -72,6 +84,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final textCol = NeoColors.text(context);
+    final mutedCol = NeoColors.mutedText(context);
+
     return Scaffold(
       body: BlueprintBackground(
         child: SafeArea(
@@ -103,22 +118,22 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      const Text(
+                      Text(
                         'BUAT AKUN BARU',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: NeoColors.textDark,
+                          color: textCol,
                           fontWeight: FontWeight.w900,
                           fontSize: 20,
                           letterSpacing: 0.5,
                         ),
                       ),
                       const SizedBox(height: 6),
-                      const Text(
+                      Text(
                         'Ayo daftar dan kelola finansial Anda dengan cerdas',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: NeoColors.textMuted,
+                          color: mutedCol,
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
                         ),
@@ -130,7 +145,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         label: 'Nama Lengkap',
                         hintText: 'Masukkan nama lengkap Anda',
                         controller: _nameController,
-                        onChanged: (_) => setState(() {}),
+                        errorText: _nameError,
+                        onChanged: (_) => setState(() => _nameError = null),
                       ),
                       const SizedBox(height: 16),
 
@@ -140,7 +156,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         hintText: 'Masukkan email aktif Anda',
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
-                        onChanged: (_) => setState(() {}),
+                        errorText: _emailError,
+                        onChanged: (_) => setState(() => _emailError = null),
                       ),
                       const SizedBox(height: 16),
 
@@ -149,8 +166,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         label: 'Kata Sandi',
                         hintText: 'Minimal 6 karakter',
                         controller: _passwordController,
-                        obscureText: true,
-                        onChanged: (_) => setState(() {}),
+                        obscureText: _obscurePassword,
+                        errorText: _passwordError,
+                        suffixIcon: IconButton(
+                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                          icon: Icon(
+                            _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                            size: 20,
+                            color: mutedCol,
+                          ),
+                        ),
+                        onChanged: (_) => setState(() => _passwordError = null),
                       ),
                       const SizedBox(height: 16),
 
@@ -176,28 +202,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         const SizedBox(height: 16),
                       ],
 
-                      // Success Banner
-                      if (_successMessage != null) ...[
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12.0),
-                          decoration: BoxDecoration(
-                            color: NeoColors.successGreen,
-                            border: Border.all(color: NeoColors.black, width: 2.0),
-                            boxShadow: NeoColors.hardShadow(offset: 4.0),
-                          ),
-                          child: Text(
-                            _successMessage!,
-                            style: const TextStyle(
-                              color: NeoColors.textLight,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-
                       // Tombol Daftar
                       NeoButton(
                         text: 'Daftar',
@@ -208,25 +212,26 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       const SizedBox(height: 24),
 
                       // Link Login
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          const Text(
+                          Text(
                             'Sudah punya akun? ',
                             style: TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: 13,
-                              color: NeoColors.textDark,
+                              color: textCol,
                             ),
                           ),
                           GestureDetector(
                             onTap: () => context.go('/login'),
-                            child: const Text(
+                            child: Text(
                               'Masuk di sini',
                               style: TextStyle(
                                 fontWeight: FontWeight.w900,
                                 fontSize: 13,
-                                color: NeoColors.primaryBlue,
+                                color: NeoColors.blueAccentText(context),
                                 decoration: TextDecoration.underline,
                                 decorationThickness: 2,
                               ),

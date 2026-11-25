@@ -20,6 +20,7 @@ class _SavingsTargetCardState extends ConsumerState<SavingsTargetCard> {
   int _rawTarget = 0;
   bool _isLoading = false;
   bool _isInit = false;
+  bool _hasEdited = false;
 
   @override
   void didChangeDependencies() {
@@ -39,6 +40,7 @@ class _SavingsTargetCardState extends ConsumerState<SavingsTargetCard> {
   }
 
   void _onTargetChanged(String val) {
+    _hasEdited = true;
     final clean = val.replaceAll(RegExp(r'\D'), '');
     if (clean.isEmpty) {
       _rawTarget = 0;
@@ -55,14 +57,34 @@ class _SavingsTargetCardState extends ConsumerState<SavingsTargetCard> {
   }
 
   Future<void> _handleSave() async {
+    if (_rawTarget <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Target tabungan harus lebih dari Rp 0.'),
+          backgroundColor: NeoColors.warningYellow,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       await ref.read(settingsProvider.notifier).setSavingsTarget(_rawTarget);
+      _hasEdited = false;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Target tabungan berhasil diperbarui!'),
             backgroundColor: NeoColors.successGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memperbarui target: ${e.toString().replaceFirst('Exception: ', '')}'),
+            backgroundColor: NeoColors.dangerRed,
           ),
         );
       }
@@ -73,6 +95,15 @@ class _SavingsTargetCardState extends ConsumerState<SavingsTargetCard> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(settingsProvider, (_, next) {
+      if (!_hasEdited && _rawTarget != next.savingsTarget) {
+        _rawTarget = next.savingsTarget;
+        _targetController.text = CurrencyFormatter.formatRupiah(_rawTarget);
+      }
+    });
+
+    final mutedCol = NeoColors.mutedText(context);
+
     return NeoCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -90,27 +121,29 @@ class _SavingsTargetCardState extends ConsumerState<SavingsTargetCard> {
                 child: const Icon(Icons.track_changes, color: NeoColors.black, size: 20),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'TARGET TABUNGAN BULANAN',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.5,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'TARGET TABUNGAN BULANAN',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
                     ),
-                  ),
-                  Text(
-                    'DIGUNAKAN UNTUK INDIKATOR DASHBOARD',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      color: NeoColors.textMuted,
-                      letterSpacing: 0.3,
+                    Text(
+                      'DIGUNAKAN UNTUK INDIKATOR DASHBOARD',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: mutedCol,
+                        letterSpacing: 0.3,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),

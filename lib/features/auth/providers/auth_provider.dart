@@ -1,10 +1,15 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../data/repositories/dummy/dummy_auth_repository.dart';
 import '../../../data/repositories/firebase/firebase_auth_repository.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  return FirebaseAuthRepository();
+  if (Firebase.apps.isNotEmpty) {
+    return FirebaseAuthRepository();
+  }
+  return DummyAuthRepository();
 });
 
 final authStateProvider = StreamProvider<AppUser?>((ref) {
@@ -12,43 +17,44 @@ final authStateProvider = StreamProvider<AppUser?>((ref) {
   return repo.authStateChanges();
 });
 
-final currentUserProvider = FutureProvider<AppUser?>((ref) async {
-  final repo = ref.watch(authRepositoryProvider);
-  return repo.getCurrentUser();
-});
-
 class AuthController extends StateNotifier<AsyncValue<AppUser?>> {
   final AuthRepository _repository;
 
   AuthController(this._repository) : super(const AsyncValue.data(null));
 
-  Future<void> login(String email, String password) async {
+  Future<AppUser> login(String email, String password) async {
     state = const AsyncValue.loading();
     try {
       final user = await _repository.signInWithEmailPassword(email, password);
-      state = AsyncValue.data(user);
+      if (mounted) state = AsyncValue.data(user);
+      return user;
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      if (mounted) state = AsyncValue.error(e, st);
+      rethrow;
     }
   }
 
-  Future<void> register(String name, String email, String password) async {
+  Future<AppUser> register(String name, String email, String password) async {
     state = const AsyncValue.loading();
     try {
       final user = await _repository.signUp(name, email, password);
-      state = AsyncValue.data(user);
+      if (mounted) state = AsyncValue.data(user);
+      return user;
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      if (mounted) state = AsyncValue.error(e, st);
+      rethrow;
     }
   }
 
-  Future<void> loginWithGoogle() async {
+  Future<AppUser> loginWithGoogle() async {
     state = const AsyncValue.loading();
     try {
       final user = await _repository.signInWithGoogle();
-      state = AsyncValue.data(user);
+      if (mounted) state = AsyncValue.data(user);
+      return user;
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      if (mounted) state = AsyncValue.error(e, st);
+      rethrow;
     }
   }
 
@@ -56,9 +62,10 @@ class AuthController extends StateNotifier<AsyncValue<AppUser?>> {
     state = const AsyncValue.loading();
     try {
       await _repository.signOut();
-      state = const AsyncValue.data(null);
+      if (mounted) state = const AsyncValue.data(null);
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      if (mounted) state = AsyncValue.error(e, st);
+      rethrow;
     }
   }
 }

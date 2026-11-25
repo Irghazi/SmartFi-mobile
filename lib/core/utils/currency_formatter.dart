@@ -11,9 +11,12 @@ class CurrencyFormatter {
 
   static final NumberFormat _numberFormat = NumberFormat.decimalPattern('id_ID');
 
-  /// Format angka integer ke string Rupiah: misal 25000 -> "Rp 25.000"
+  /// Format angka integer ke string Rupiah: misal 25000 -> "Rp 25.000", -25000 -> "-Rp 25.000"
   static String formatRupiah(num? amount) {
     if (amount == null) return 'Rp 0';
+    if (amount < 0) {
+      return '-${_rupiahFormat.format(amount.abs())}';
+    }
     return _rupiahFormat.format(amount);
   }
 
@@ -23,10 +26,13 @@ class CurrencyFormatter {
     return _numberFormat.format(amount);
   }
 
-  /// Parse string angka atau input berpemisah ribuan ke integer bersih
+  /// Parse string angka atau input berpemisah ribuan ke integer bersih (mempertahankan tanda minus di depan)
   static int parseCleanInt(String value) {
-    final clean = value.replaceAll(RegExp(r'[^0-9]'), '');
-    return int.tryParse(clean) ?? 0;
+    final trimmed = value.trim();
+    final isNegative = trimmed.startsWith('-');
+    final clean = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+    final parsed = int.tryParse(clean) ?? 0;
+    return isNegative && parsed > 0 ? -parsed : parsed;
   }
 }
 

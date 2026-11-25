@@ -43,11 +43,12 @@ class CsvExportService {
     // Baris SALDO BERSIH
     rows.add(['', '', '', 'SALDO BERSIH', '', netBalance.toString()].join(','));
 
-    final csvContent = rows.join('\n');
+    final csvContent = '\uFEFF${rows.join('\n')}';
 
-    // Simpan ke direktori cache / dokumen
+    // Simpan ke direktori cache dengan nama bertimestamp agar tidak tertimpa cache share
     final tempDir = await getTemporaryDirectory();
-    final file = File('${tempDir.path}/laporan_keuangan_smartfi.csv');
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final file = File('${tempDir.path}/laporan_keuangan_smartfi_$ts.csv');
     await file.writeAsString(csvContent);
 
     // Bagikan file menggunakan share_plus

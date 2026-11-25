@@ -5,6 +5,8 @@ import '../../../core/config/ai_config.dart';
 import '../../../data/repositories/ai_repository.dart';
 import '../../../data/repositories/dummy/dummy_ai_repository.dart';
 import '../../../data/repositories/openai/openai_ai_repository.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../settings/providers/settings_provider.dart';
 import '../../transactions/providers/transaction_provider.dart';
 import '../models/chat_message.dart';
 
@@ -49,19 +51,29 @@ class ChatState {
 class ChatNotifier extends StateNotifier<ChatState> {
   final AiRepository _aiRepository;
   final Ref _ref;
-  static const String _storageKey = 'smartfi_ai_chat_history';
+  final String _userId;
+  int _msgSeq = 0;
 
-  static final List<ChatMessage> _initialGreeting = [
-    ChatMessage(
-      id: 'msg_greet',
-      role: 'ai',
-      content: 'Halo! Saya SmartFi, Mentor Keuangan Pribadimu. Apa yang ingin kamu ketahui? Kamu bisa bertanya tentang pengeluaran terbesar, saran hemat, atau ringkasan bulan ini.',
-      createdAt: DateTime.now(),
-    ),
-  ];
+  String get _storageKey => 'smartfi_ai_chat_history_$_userId';
 
-  ChatNotifier(this._aiRepository, this._ref) : super(ChatState(messages: _initialGreeting)) {
+  static List<ChatMessage> _createInitialGreeting() => [
+        ChatMessage(
+          id: 'msg_greet',
+          role: 'ai',
+          content:
+              'Halo! Saya SmartFi, Mentor Keuangan Pribadimu. Apa yang ingin kamu ketahui? Kamu bisa bertanya tentang pengeluaran terbesar, saran hemat, atau ringkasan bulan ini.',
+          createdAt: DateTime.now(),
+        ),
+      ];
+
+  ChatNotifier(this._aiRepository, this._ref, this._userId)
+      : super(ChatState(messages: _createInitialGreeting())) {
     loadChatHistory();
+  }
+
+  String _nextId([String prefix = 'msg']) {
+    _msgSeq++;
+    return '${prefix}_${DateTime.now().microsecondsSinceEpoch}_$_msgSeq';
   }
 
   Future<void> loadChatHistory() async {
@@ -70,29 +82,51 @@ class ChatNotifier extends StateNotifier<ChatState> {
       final savedStr = prefs.getString(_storageKey);
       if (savedStr != null && savedStr.isNotEmpty) {
         final List<dynamic> list = jsonDecode(savedStr);
-        final loaded = list.map((item) => ChatMessage.fromJson(item as Map<String, dynamic>)).toList();
-        if (loaded.isNotEmpty) {
+        final loaded = list
+            .map((item) => ChatMessage.fromJson(item as Map<String, dynamic>))
+            .where((m) => !m.isError)
+            .toList();
+        if (loaded.isNotEmpty && mounted) {
           state = state.copyWith(messages: loaded);
           return;
         }
       }
     } catch (_) {}
-    state = state.copyWith(messages: _initialGreeting);
+    if (mounted) {
+      state = state.copyWith(messages: _createInitialGreeting());
+    }
   }
 
   Future<void> _saveHistory(List<ChatMessage> list) async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonList = list.map((m) => m.toJson()).toList();
+    // Jangan simpan pesan error sementara ke riwayat permanen
+    final persistable = list.where((m) => !m.isError).toList();
+    final jsonList = persistable.map((m) => m.toJson()).toList();
     await prefs.setString(_storageKey, jsonEncode(jsonList));
   }
 
-  String _buildFinancialContext() {
-    final txsAsync = _ref.read(transactionsProvider);
-    final txs = txsAsync.asData?.value ?? [];
+  Future<String> _buildFinancialContext() async {
+    var txsAsync = _ref.read(transactionsProvider);
+    var txs = txsAsync.asData?.value ?? [];
+
+    if (txsAsync.isLoading && _userId != 'guest') {
+      try {
+        txs = await _ref.read(transactionRepositoryProvider).getTransactions(_userId);
+      } catch (_) {}
+    }
+
+    final now = DateTime.now();
+    final monthTxs = txs.where(
+      (t) => t.transactionDate.month == now.month && t.transactionDate.year == now.year,
+    );
 
     final income = txs.where((t) => t.isIncome).fold<int>(0, (sum, t) => sum + t.nominal);
     final expense = txs.where((t) => t.isExpense).fold<int>(0, (sum, t) => sum + t.nominal);
     final balance = income - expense;
+
+    final incomeMonth = monthTxs.where((t) => t.isIncome).fold<int>(0, (sum, t) => sum + t.nominal);
+    final expenseMonth = monthTxs.where((t) => t.isExpense).fold<int>(0, (sum, t) => sum + t.nominal);
+    final targetSavings = _ref.read(settingsProvider).savingsTarget;
 
     // Hitung kategori terbesar
     final catTotals = <String, int>{};
@@ -100,7 +134,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       catTotals[t.categoryName] = (catTotals[t.categoryName] ?? 0) + t.nominal;
     }
 
-    String topCategory = 'Makanan';
+    String topCategory = 'Belum Ada';
     int topAmount = 0;
     catTotals.forEach((cat, amt) {
       if (amt > topAmount) {
@@ -109,36 +143,54 @@ class ChatNotifier extends StateNotifier<ChatState> {
       }
     });
 
-    final recent15 = txs.take(15).map((t) => {
-      'tipe': t.type,
-      'kategori': t.categoryName,
-      'nominal': t.nominal,
-      'deskripsi': t.description,
-      'tanggal': t.transactionDate.toIso8601String().split('T').first,
-    }).toList();
+    final recent15 = txs
+        .take(15)
+        .map((t) => {
+              'tipe': t.type,
+              'kategori': t.categoryName,
+              'nominal': t.nominal,
+              'deskripsi': t.description,
+              'tanggal': t.transactionDate.toIso8601String().split('T').first,
+            })
+        .toList();
 
     return jsonEncode({
       'saldo_terkini': balance,
       'total_pemasukan': income,
       'total_pengeluaran': expense,
+      'pemasukan_bulan_ini': incomeMonth,
+      'pengeluaran_bulan_ini': expenseMonth,
+      'target_tabungan_bulanan': targetSavings,
       'kategori_terbesar': topCategory,
       'nominal_kategori_terbesar': topAmount,
       'transaksi_terbaru': recent15,
     });
   }
 
+  String _cleanErrorText(Object e) {
+    return e
+        .toString()
+        .replaceFirst('Exception: ', '')
+        .replaceFirst('HttpException: ', '')
+        .replaceFirst('SocketException: ', '')
+        .trim();
+  }
+
   Future<void> sendMessage(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || state.isLoading) return;
 
+    // Bersihkan error bubble sebelumnya sebelum mengirim pesan baru
+    final baseHistory = state.messages.where((m) => !m.isError).toList();
+
     final userMsg = ChatMessage(
-      id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
+      id: _nextId(),
       role: 'user',
       content: trimmed,
       createdAt: DateTime.now(),
     );
 
-    final currentMessages = [...state.messages, userMsg];
+    final currentMessages = [...baseHistory, userMsg];
     state = state.copyWith(
       messages: currentMessages,
       isLoading: true,
@@ -147,43 +199,50 @@ class ChatNotifier extends StateNotifier<ChatState> {
     await _saveHistory(currentMessages);
 
     try {
-      final contextJson = _buildFinancialContext();
+      final contextJson = await _buildFinancialContext();
       final reply = await _aiRepository.askMentor(
         message: trimmed,
-        history: state.messages,
+        history: currentMessages,
         financialContextJson: contextJson,
       );
 
       final aiMsg = ChatMessage(
-        id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
+        id: _nextId(),
         role: 'ai',
         content: reply,
         createdAt: DateTime.now(),
       );
 
       final updated = [...currentMessages, aiMsg];
-      state = state.copyWith(messages: updated, isLoading: false);
+      if (mounted) {
+        state = state.copyWith(messages: updated, isLoading: false);
+      }
       await _saveHistory(updated);
     } catch (e) {
-      final friendlyError = e.toString().replaceAll('Exception: ', '').replaceAll('HttpException: ', '').replaceAll('SocketException: ', '');
+      final friendlyError = _cleanErrorText(e);
       final aiErrorMsg = ChatMessage(
-        id: 'msg_err_${DateTime.now().millisecondsSinceEpoch}',
+        id: _nextId('msg_err'),
         role: 'ai',
         content: friendlyError.isNotEmpty
             ? friendlyError
             : 'Terjadi kesalahan saat menghubungi server AI. Mohon coba sesaat lagi.',
         createdAt: DateTime.now(),
+        isError: true,
       );
       final updated = [...currentMessages, aiErrorMsg];
-      state = state.copyWith(messages: updated, isLoading: false, errorMessage: friendlyError);
-      await _saveHistory(updated);
+      if (mounted) {
+        state = state.copyWith(
+          messages: updated,
+          isLoading: false,
+          errorMessage: friendlyError,
+        );
+      }
     }
   }
 
   Future<void> regenerateLastResponse() async {
     if (state.isLoading || state.messages.isEmpty) return;
 
-    // Cari pesan user terakhir
     int lastUserIndex = -1;
     for (int i = state.messages.length - 1; i >= 0; i--) {
       if (state.messages[i].isUser) {
@@ -195,12 +254,15 @@ class ChatNotifier extends StateNotifier<ChatState> {
     if (lastUserIndex == -1) return;
 
     final userMsgText = state.messages[lastUserIndex].content;
-    final truncatedList = state.messages.sublist(0, lastUserIndex + 1);
+    final truncatedList = state.messages
+        .sublist(0, lastUserIndex + 1)
+        .where((m) => !m.isError)
+        .toList();
 
     state = state.copyWith(messages: truncatedList, isLoading: true, errorMessage: null);
 
     try {
-      final contextJson = _buildFinancialContext();
+      final contextJson = await _buildFinancialContext();
       final reply = await _aiRepository.askMentor(
         message: userMsgText,
         history: truncatedList,
@@ -208,23 +270,41 @@ class ChatNotifier extends StateNotifier<ChatState> {
       );
 
       final aiMsg = ChatMessage(
-        id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
+        id: _nextId(),
         role: 'ai',
         content: reply,
         createdAt: DateTime.now(),
       );
 
       final updated = [...truncatedList, aiMsg];
-      state = state.copyWith(messages: updated, isLoading: false);
+      if (mounted) {
+        state = state.copyWith(messages: updated, isLoading: false);
+      }
       await _saveHistory(updated);
     } catch (e) {
-      final friendlyError = e.toString().replaceAll('Exception: ', '').replaceAll('HttpException: ', '').replaceAll('SocketException: ', '');
-      state = state.copyWith(isLoading: false, errorMessage: friendlyError);
+      final friendlyError = _cleanErrorText(e);
+      final aiErrorMsg = ChatMessage(
+        id: _nextId('msg_err'),
+        role: 'ai',
+        content: friendlyError.isNotEmpty
+            ? friendlyError
+            : 'Terjadi kesalahan saat menghubungi server AI. Mohon coba sesaat lagi.',
+        createdAt: DateTime.now(),
+        isError: true,
+      );
+      final updated = [...truncatedList, aiErrorMsg];
+      if (mounted) {
+        state = state.copyWith(
+          messages: updated,
+          isLoading: false,
+          errorMessage: friendlyError,
+        );
+      }
     }
   }
 
   Future<void> clearHistory() async {
-    state = ChatState(messages: _initialGreeting);
+    state = ChatState(messages: _createInitialGreeting());
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_storageKey);
   }
@@ -232,6 +312,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
 final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>((ref) {
   final repo = ref.watch(aiRepositoryProvider);
-  return ChatNotifier(repo, ref);
+  final userId = ref.watch(authStateProvider.select((s) => s.asData?.value?.id)) ?? 'guest';
+  return ChatNotifier(repo, ref, userId);
 });
 

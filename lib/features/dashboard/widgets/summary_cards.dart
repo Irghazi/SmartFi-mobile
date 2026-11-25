@@ -90,14 +90,19 @@ class DashboardSummaryCards extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'PEMASUKAN',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.5,
+                        const Expanded(
+                          child: Text(
+                            'PEMASUKAN',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        const SizedBox(width: 4),
                         Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
@@ -111,10 +116,10 @@ class DashboardSummaryCards extends StatelessWidget {
                     const SizedBox(height: 8),
                     Text(
                       CurrencyFormatter.formatRupiah(income),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w900,
-                        color: NeoColors.successGreen,
+                        color: NeoColors.incomeText(context),
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -133,14 +138,19 @@ class DashboardSummaryCards extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'PENGELUARAN',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.5,
+                        const Expanded(
+                          child: Text(
+                            'PENGELUARAN',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        const SizedBox(width: 4),
                         Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
@@ -154,10 +164,10 @@ class DashboardSummaryCards extends StatelessWidget {
                     const SizedBox(height: 8),
                     Text(
                       CurrencyFormatter.formatRupiah(expense),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w900,
-                        color: NeoColors.dangerRed,
+                        color: NeoColors.expenseText(context),
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

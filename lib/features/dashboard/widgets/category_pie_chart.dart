@@ -35,6 +35,20 @@ class CategoryPieChart extends StatelessWidget {
 
     final totalExpense = sortedEntries.fold<int>(0, (sum, e) => sum + e.value);
 
+    // Gabungkan kategori ke-5 ke atas menjadi "Lainnya" agar pie & legend sinkron 100%
+    final displayEntries = sortedEntries.length > 4
+        ? [
+            ...sortedEntries.take(4),
+            MapEntry(
+              'Lainnya',
+              sortedEntries.skip(4).fold<int>(0, (sum, e) => sum + e.value),
+            ),
+          ]
+        : sortedEntries;
+
+    final borderCol = NeoColors.border(context);
+    final mutedCol = NeoColors.mutedText(context);
+
     return NeoCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -48,13 +62,13 @@ class CategoryPieChart extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          if (sortedEntries.isEmpty) ...[
+          if (displayEntries.isEmpty) ...[
             Container(
               height: 160,
               alignment: Alignment.center,
-              child: const Text(
+              child: Text(
                 'Belum ada data pengeluaran',
-                style: TextStyle(fontWeight: FontWeight.w800, color: NeoColors.textMuted),
+                style: TextStyle(fontWeight: FontWeight.w800, color: mutedCol),
               ),
             ),
           ] else ...[
@@ -62,13 +76,13 @@ class CategoryPieChart extends StatelessWidget {
               children: [
                 // Doughnut Pie
                 SizedBox(
-                  width: 130,
-                  height: 130,
+                  width: 120,
+                  height: 120,
                   child: PieChart(
                     PieChartData(
-                      centerSpaceRadius: 32,
+                      centerSpaceRadius: 28,
                       sectionsSpace: 2,
-                      sections: sortedEntries.asMap().entries.map((entry) {
+                      sections: displayEntries.asMap().entries.map((entry) {
                         final idx = entry.key;
                         final item = entry.value;
                         final color = _palette[idx % _palette.length];
@@ -76,26 +90,26 @@ class CategoryPieChart extends StatelessWidget {
                         return PieChartSectionData(
                           value: item.value.toDouble(),
                           color: color,
-                          radius: 28,
+                          radius: 26,
                           showTitle: false,
-                          borderSide: const BorderSide(color: NeoColors.black, width: 2),
+                          borderSide: BorderSide(color: borderCol, width: 2),
                         );
                       }).toList(),
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 14),
 
                 // Legend List
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
-                    children: sortedEntries.take(4).toList().asMap().entries.map((entry) {
+                    children: displayEntries.asMap().entries.map((entry) {
                       final idx = entry.key;
                       final item = entry.value;
                       final color = _palette[idx % _palette.length];
-                      final percent = totalExpense > 0 ? ((item.value / totalExpense) * 100).toInt() : 0;
+                      final percent = totalExpense > 0 ? ((item.value / totalExpense) * 100).round() : 0;
 
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 3.0),
@@ -106,7 +120,7 @@ class CategoryPieChart extends StatelessWidget {
                               height: 12,
                               decoration: BoxDecoration(
                                 color: color,
-                                border: Border.all(color: NeoColors.black, width: 1.5),
+                                border: Border.all(color: borderCol, width: 1.5),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -118,6 +132,7 @@ class CategoryPieChart extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            const SizedBox(width: 4),
                             Text(
                               '$percent%',
                               style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),

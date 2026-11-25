@@ -45,7 +45,7 @@ class DummyTransactionRepository implements TransactionRepository {
         if (tx.transactionDate.isBefore(startOfDay)) return false;
       }
       if (endDate != null) {
-        final endOfDay = DateTime(endDate.year, endDate.month, endDate.day, 23, 59, 59);
+        final endOfDay = DateTime(endDate.year, endDate.month, endDate.day, 23, 59, 59, 999, 999);
         if (tx.transactionDate.isAfter(endOfDay)) return false;
       }
       if (type != null && type != 'all') {

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/config/ai_config.dart';
 import '../../../core/services/audio_service.dart';
 import '../../../core/theme/neo_colors.dart';
 import '../../../shared/widgets/blueprint_background.dart';
+import '../../../shared/widgets/neo_button.dart';
+import '../../../shared/widgets/neo_modal.dart';
 import '../models/chat_message.dart';
 import '../providers/ai_provider.dart';
 import '../widgets/chat_message_bubble.dart';
@@ -31,7 +34,7 @@ class _AiAdvisorScreenState extends ConsumerState<AiAdvisorScreen> {
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
+      if (mounted && _scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 300),
@@ -61,103 +64,41 @@ class _AiAdvisorScreenState extends ConsumerState<AiAdvisorScreen> {
   }
 
   Future<void> _handleConfirmClear() async {
-    final shouldClear = await showDialog<bool>(
+    final shouldClear = await NeoModal.show<bool>(
       context: context,
-      barrierColor: const Color(0x99000000),
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Container(
-          decoration: BoxDecoration(
-            color: NeoColors.surfaceLight,
-            border: Border.all(color: NeoColors.black, width: 4),
-            boxShadow: NeoColors.hardShadow(offset: 8),
+      title: 'Hapus Obrolan',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Apakah Anda yakin ingin menghapus semua riwayat obrolan dengan Penasihat AI?',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              height: 1.4,
+            ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          const SizedBox(height: 20),
+          Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: const BoxDecoration(
-                  color: NeoColors.bgLight,
-                  border: Border(
-                    bottom: BorderSide(color: NeoColors.black, width: 4),
-                  ),
-                ),
-                child: const Text(
-                  'HAPUS OBROLAN',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                  ),
+              Expanded(
+                child: NeoButton(
+                  text: 'Batal',
+                  variant: NeoButtonVariant.outline,
+                  onPressed: () => Navigator.of(context).pop(false),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Apakah Anda yakin ingin menghapus semua riwayat obrolan dengan Penasihat AI?',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        height: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: InkWell(
-                            onTap: () => Navigator.of(ctx).pop(false),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: NeoColors.white,
-                                border: Border.all(color: NeoColors.black, width: 2),
-                                boxShadow: NeoColors.hardShadow(offset: 2),
-                              ),
-                              alignment: Alignment.center,
-                              child: const Text(
-                                'BATAL',
-                                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: InkWell(
-                            onTap: () => Navigator.of(ctx).pop(true),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: NeoColors.dangerRed,
-                                border: Border.all(color: NeoColors.black, width: 2),
-                                boxShadow: NeoColors.hardShadow(offset: 2),
-                              ),
-                              alignment: Alignment.center,
-                              child: const Text(
-                                'HAPUS',
-                                style: TextStyle(
-                                  color: NeoColors.white,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: NeoButton(
+                  text: 'Hapus',
+                  variant: NeoButtonVariant.danger,
+                  onPressed: () => Navigator.of(context).pop(true),
                 ),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
 
@@ -167,132 +108,131 @@ class _AiAdvisorScreenState extends ConsumerState<AiAdvisorScreen> {
   }
 
   void _showApiSourceDialog() {
-    final isReal = ref.read(useRealAiApiProvider);
-    showDialog(
+    final isReal = ref.read(useRealAiApiProvider) && AiConfig.hasApiKey;
+    final surfaceCol = NeoColors.surface(context);
+    final borderCol = NeoColors.border(context);
+    final textCol = NeoColors.text(context);
+    final mutedCol = NeoColors.mutedText(context);
+
+    NeoModal.show(
       context: context,
-      barrierColor: const Color(0x99000000),
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Container(
-          decoration: BoxDecoration(
-            color: NeoColors.surfaceLight,
-            border: Border.all(color: NeoColors.black, width: 4),
-            boxShadow: NeoColors.hardShadow(offset: 8),
+      title: 'Sumber API AI',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Pilih sumber kecerdasan AI untuk konsultasi finansial:',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: textCol),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: const BoxDecoration(
-                  color: NeoColors.bgLight,
-                  border: Border(
-                    bottom: BorderSide(color: NeoColors.black, width: 4),
+          const SizedBox(height: 14),
+          InkWell(
+            onTap: () {
+              if (!AiConfig.hasApiKey) {
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'API Key belum dikonfigurasi di env.json. Menjalankan mode OFFLINE.',
+                    ),
+                    backgroundColor: NeoColors.warningYellow,
                   ),
-                ),
-                child: const Text(
-                  'SUMBER API AI',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
+                );
+                return;
+              }
+              ref.read(useRealAiApiProvider.notifier).state = true;
+              Navigator.of(context).pop();
+            },
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isReal ? NeoColors.yellowAccent : surfaceCol,
+                border: Border.all(color: isReal ? NeoColors.black : borderCol, width: 2),
+                boxShadow: NeoColors.hardShadow(offset: 2),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isReal ? Icons.radio_button_checked : Icons.radio_button_off,
+                    color: isReal ? NeoColors.black : textCol,
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'API BANGUNWEB (REAL ONLINE)',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12,
+                            color: isReal ? NeoColors.textDark : textCol,
+                          ),
+                        ),
+                        Text(
+                          AiConfig.hasApiKey
+                              ? 'Menggunakan endpoint OpenAI via BangunWeb'
+                              : 'API Key belum diatur pada env.json',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: !AiConfig.hasApiKey
+                                ? NeoColors.dangerRed
+                                : (isReal ? NeoColors.textMuted : mutedCol),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Pilih sumber kecerdasan AI untuk konsultasi finansial:',
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-                    ),
-                    const SizedBox(height: 14),
-                    InkWell(
-                      onTap: () {
-                        ref.read(useRealAiApiProvider.notifier).state = true;
-                        Navigator.of(ctx).pop();
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isReal ? NeoColors.yellowAccent : NeoColors.white,
-                          border: Border.all(color: NeoColors.black, width: 2),
-                          boxShadow: NeoColors.hardShadow(offset: 2),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              isReal ? Icons.radio_button_checked : Icons.radio_button_off,
-                              color: NeoColors.black,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
-                                  Text(
-                                    'API BANGUNWEB (REAL ONLINE)',
-                                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
-                                  ),
-                                  Text(
-                                    'Menggunakan endpoint OpenAI via BangunWeb (env.json)',
-                                    style: TextStyle(fontSize: 10, color: NeoColors.textMuted),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    InkWell(
-                      onTap: () {
-                        ref.read(useRealAiApiProvider.notifier).state = false;
-                        Navigator.of(ctx).pop();
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: !isReal ? NeoColors.yellowAccent : NeoColors.white,
-                          border: Border.all(color: NeoColors.black, width: 2),
-                          boxShadow: NeoColors.hardShadow(offset: 2),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              !isReal ? Icons.radio_button_checked : Icons.radio_button_off,
-                              color: NeoColors.black,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
-                                  Text(
-                                    'DUMMY REPOSITORY (OFFLINE)',
-                                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
-                                  ),
-                                  Text(
-                                    'Bekerja tanpa koneksi internet dengan kalkulasi lokal',
-                                    style: TextStyle(fontSize: 10, color: NeoColors.textMuted),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(height: 10),
+          InkWell(
+            onTap: () {
+              ref.read(useRealAiApiProvider.notifier).state = false;
+              Navigator.of(context).pop();
+            },
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: !isReal ? NeoColors.yellowAccent : surfaceCol,
+                border: Border.all(color: !isReal ? NeoColors.black : borderCol, width: 2),
+                boxShadow: NeoColors.hardShadow(offset: 2),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    !isReal ? Icons.radio_button_checked : Icons.radio_button_off,
+                    color: !isReal ? NeoColors.black : textCol,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'DUMMY REPOSITORY (OFFLINE)',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12,
+                            color: !isReal ? NeoColors.textDark : textCol,
+                          ),
+                        ),
+                        Text(
+                          'Bekerja tanpa koneksi internet dengan kalkulasi lokal',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: !isReal ? NeoColors.textMuted : mutedCol,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -302,7 +242,12 @@ class _AiAdvisorScreenState extends ConsumerState<AiAdvisorScreen> {
     final chatState = ref.watch(chatProvider);
     final messages = chatState.messages;
     final isLoading = chatState.isLoading;
-    final isRealApi = ref.watch(useRealAiApiProvider);
+    final isRealApi = ref.watch(useRealAiApiProvider) && AiConfig.hasApiKey;
+
+    final surfaceCol = NeoColors.surface(context);
+    final borderCol = NeoColors.border(context);
+    final textCol = NeoColors.text(context);
+    final mutedCol = NeoColors.mutedText(context);
 
     // Auto scroll saat pesan berubah
     ref.listen(chatProvider, (_, __) => _scrollToBottom());
@@ -310,62 +255,46 @@ class _AiAdvisorScreenState extends ConsumerState<AiAdvisorScreen> {
     return BlueprintBackground(
       child: Column(
         children: [
-          // Header Terintegrasi Neobrutalism
+          // Toolbar Ringkas Mentor AI (tanpa judul duplikat dengan NeoAppBar)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(
-              color: NeoColors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: surfaceCol,
               border: Border(
-                bottom: BorderSide(color: NeoColors.black, width: 3),
+                bottom: BorderSide(color: borderCol, width: 3),
               ),
             ),
             child: Row(
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 30,
+                  height: 30,
                   decoration: BoxDecoration(
                     color: NeoColors.white,
                     border: Border.all(color: NeoColors.black, width: 2),
-                    boxShadow: NeoColors.hardShadow(offset: 2),
                   ),
-                  padding: const EdgeInsets.all(4),
-                  child: Image.asset(
-                    'assets/images/logo.png',
-                    fit: BoxFit.contain,
-                  ),
+                  padding: const EdgeInsets.all(3),
+                  child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
-                        'PENASIHAT AI',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      SizedBox(height: 1),
-                      Text(
-                        'SELALU SIAP MEMBANTU KEUANGANMU',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          color: NeoColors.textMuted,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    'MENTOR FINANSIAL PRIBADI',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.3,
+                      color: mutedCol,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 // Badge Mode API
                 InkWell(
                   onTap: _showApiSourceDialog,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                     decoration: BoxDecoration(
                       color: isRealApi ? NeoColors.successGreenLight : NeoColors.yellowAccent,
                       border: Border.all(color: NeoColors.black, width: 2),
@@ -374,8 +303,9 @@ class _AiAdvisorScreenState extends ConsumerState<AiAdvisorScreen> {
                     child: Text(
                       isRealApi ? 'REAL AI' : 'OFFLINE',
                       style: const TextStyle(
-                        fontSize: 9,
+                        fontSize: 10,
                         fontWeight: FontWeight.w900,
+                        color: NeoColors.textDark,
                       ),
                     ),
                   ),
@@ -390,12 +320,12 @@ class _AiAdvisorScreenState extends ConsumerState<AiAdvisorScreen> {
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       color: messages.length <= 1 || isLoading
-                          ? Colors.grey.shade300
-                          : NeoColors.white,
-                      border: Border.all(color: NeoColors.black, width: 2),
+                          ? NeoColors.disabledSurface(context)
+                          : surfaceCol,
+                      border: Border.all(color: borderCol, width: 2),
                       boxShadow: NeoColors.hardShadow(offset: 2),
                     ),
-                    child: const Icon(Icons.refresh, size: 18, color: NeoColors.black),
+                    child: Icon(Icons.refresh, size: 17, color: textCol),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -409,7 +339,7 @@ class _AiAdvisorScreenState extends ConsumerState<AiAdvisorScreen> {
                       border: Border.all(color: NeoColors.black, width: 2),
                       boxShadow: NeoColors.hardShadow(offset: 2),
                     ),
-                    child: const Icon(Icons.delete_outline, size: 18, color: NeoColors.white),
+                    child: const Icon(Icons.delete_outline, size: 17, color: NeoColors.white),
                   ),
                 ),
               ],
@@ -434,7 +364,6 @@ class _AiAdvisorScreenState extends ConsumerState<AiAdvisorScreen> {
                         ref.read(chatProvider.notifier).regenerateLastResponse(),
                   );
                 } else {
-                  // Bubble loading typing indicator
                   return ChatMessageBubble(
                     message: ChatMessage(
                       id: 'typing_temp',
@@ -451,11 +380,11 @@ class _AiAdvisorScreenState extends ConsumerState<AiAdvisorScreen> {
 
           // Area Bawah: Suggestion Pills + Input Box
           Container(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-            decoration: const BoxDecoration(
-              color: NeoColors.white,
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+            decoration: BoxDecoration(
+              color: surfaceCol,
               border: Border(
-                top: BorderSide(color: NeoColors.black, width: 3),
+                top: BorderSide(color: borderCol, width: 3),
               ),
             ),
             child: SafeArea(
@@ -477,27 +406,27 @@ class _AiAdvisorScreenState extends ConsumerState<AiAdvisorScreen> {
                       Expanded(
                         child: Container(
                           decoration: BoxDecoration(
-                            color: NeoColors.white,
-                            border: Border.all(color: NeoColors.black, width: 3),
+                            color: NeoColors.surfaceSecondary(context),
+                            border: Border.all(color: borderCol, width: 3),
                             boxShadow: NeoColors.hardShadow(offset: 3),
                           ),
                           child: TextField(
                             controller: _inputController,
                             focusNode: _focusNode,
                             enabled: !isLoading,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
-                              color: NeoColors.black,
+                              color: textCol,
                             ),
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               hintText: 'Ketik pertanyaan Anda...',
                               hintStyle: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: NeoColors.textMuted,
+                                color: mutedCol,
                               ),
-                              contentPadding: EdgeInsets.symmetric(
+                              contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 14,
                                 vertical: 12,
                               ),
@@ -513,7 +442,9 @@ class _AiAdvisorScreenState extends ConsumerState<AiAdvisorScreen> {
                         child: Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: isLoading ? Colors.grey.shade400 : NeoColors.primaryBlue,
+                            color: isLoading
+                                ? NeoColors.disabledSurface(context)
+                                : NeoColors.primaryBlue,
                             border: Border.all(color: NeoColors.black, width: 3),
                             boxShadow: NeoColors.hardShadow(
                               offset: isLoading ? 0 : 3,
@@ -531,14 +462,14 @@ class _AiAdvisorScreenState extends ConsumerState<AiAdvisorScreen> {
                   const SizedBox(height: 6),
 
                   // Disclaimer
-                  const Text(
+                  Text(
                     'SmartFi AI dapat membuat kesalahan. Harap verifikasi informasi penting.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 9,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 0.2,
-                      color: NeoColors.textMuted,
+                      color: mutedCol,
                     ),
                   ),
                 ],

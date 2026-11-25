@@ -200,6 +200,14 @@ class PdfExportService {
               headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
               cellStyle: const pw.TextStyle(fontSize: 8),
               cellAlignment: pw.Alignment.centerLeft,
+              columnWidths: const {
+                0: pw.FixedColumnWidth(26),
+                1: pw.FixedColumnWidth(68),
+                2: pw.FlexColumnWidth(1.2),
+                3: pw.FlexColumnWidth(2.0),
+                4: pw.FlexColumnWidth(1.3),
+                5: pw.FlexColumnWidth(1.3),
+              },
               headers: ['No', 'Tanggal', 'Kategori', 'Deskripsi', 'Pemasukan (Rp)', 'Pengeluaran (Rp)'],
               data: [
                 ...transactions.asMap().entries.map((entry) {

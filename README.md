@@ -18,7 +18,7 @@ Aplikasi ini menggunakan konfigurasi lingkungan aman via `env.json` (OpenAI-comp
 Pastikan file `env.json` telah berada di direktori root `smartfi-mobile` (berisi variabel lingkungan aman tanpa hardcode di repositori):
 ```json
 {
-  "AI_BASE_URL": "https://api.bangunweb.com/v1",
+  "AI_BASE_URL": "https://router.bangunweb.com/v1",
   "AI_MODEL": "deepseek-v4.1-flash",
   "AI_API_KEY": "YOUR_API_KEY"
 }
@@ -30,7 +30,7 @@ Jalankan perintah berikut di terminal:
 ```bash
 flutter run --dart-define-from-file=env.json
 ```
-Aplikasi akan langsung berjalan dengan mode **Offline-First (Dummy Repository)** untuk autentikasi, transaksi, dan kategori, serta **Real API** untuk Mentor AI & Smart Input Parser.
+Aplikasi berjalan dengan backend **Firebase (Auth + Cloud Firestore dengan Offline Persistence)** secara otomatis apabila `android/app/google-services.json` dan `lib/firebase_options.dart` tersedia, serta otomatis fallback ke **Mode Offline (Dummy Repository)** apabila Firebase belum terkonfigurasi. Untuk Mentor AI & Smart Input AI, aplikasi menggunakan **Real API** ketika `AI_API_KEY` diisi (dengan fallback parser lokal jika offline).
 
 ---
 
@@ -69,27 +69,31 @@ Aplikasi akan langsung berjalan dengan mode **Offline-First (Dummy Repository)**
    - Kontrol suara (Mute klik & Mute AI).
    - Koreksi saldo riil otomatis (*Penyesuaian Saldo*).
    - Zona Bahaya: Hapus riwayat transaksi per rentang waktu (Bulan Ini, Tahun Ini, Semua Waktu).
+7. **Widget Beranda Android 4×2 (Neobrutalism)**:
+   - Menampilkan Saldo Terkini, Progress Bar Target Tabungan, Pemasukan & Pengeluaran Bulan Ini secara otomatis tersinkron.
+   - Tombol 1-ketukan untuk **Sensor Saldo (Privasi)**, **`+ CATAT`** (langsung ke tab Transaksi Smart Input AI), dan **`AI`** (langsung ke Mentor AI), adaptif tema Terang/Gelap.
+8. **Auto-Update Dalam Aplikasi (Cloud Firestore)**:
+   - Deteksi versi baru *real-time* dari dokumen `app_config/android`, unduh APK langsung dengan progress bar, dan pemicu installer Android.
 
 ---
 
-## 🔒 Panduan Pengaktifan Firebase (Masa Depan)
+## 🔒 Konfigurasi Firebase (Aktif)
 
-Aplikasi telah disiapkan dengan arsitektur **Standby Repositories** di folder `lib/data/repositories/firebase/` dan aturan keamanan di folder `firebase/`. Saat Anda siap menghubungkan backend Cloud Firebase asli, ikuti panduan berikut:
+Aplikasi sudah terintegrasi penuh dengan **Firebase Authentication** (Email/Password & Google Sign-In) serta **Cloud Firestore** (dengan *offline persistence*) di `lib/data/repositories/firebase/`, dengan aturan keamanan di `firebase/firestore.rules`. Jika Anda ingin memindahkan ke proyek Firebase baru, ikuti langkah berikut:
 
 ### Langkah 1: Buat Proyek di Firebase Console
 1. Buka [Firebase Console](https://console.firebase.google.com/) dan buat proyek baru (Paket **Spark** / Gratis).
 2. Daftarkan aplikasi Android dengan:
-   - **Package name**: `com.smartfi.mobile`
-   - **SHA-1 Fingerprint**: Dapatkan melalui perintah terminal `cd android && ./gradlew signingReport` (dibutuhkan untuk Google Sign-In).
+   - **Application ID / Package name**: `smartfi.app.mobile` (namespace Kotlin: `com.smartfi.mobile`)
+   - **SHA-1 Fingerprint**: Dapatkan melalui perintah terminal `cd android && ./gradlew signingReport` (wajib untuk Google Sign-In).
 
 ### Langkah 2: Aktifkan Layanan Firebase
 1. **Authentication**: Aktifkan penyedia *Email/Password* dan *Google*.
 2. **Cloud Firestore**:
    - Buat database di lokasi terdekat (misal `asia-southeast2` Jakarta).
-   - Pasang aturan keamanan yang telah disediakan pada berkas `firebase/firestore.rules`.
-   - Deploy aturan keamanan menggunakan Firebase CLI:
+   - Deploy aturan keamanan dan index yang tersedia pada folder `firebase/`:
      ```bash
-     firebase deploy --only firestore:rules
+     firebase deploy --only firestore:rules,firestore:indexes
      ```
 
 ### Langkah 3: Konfigurasi FlutterFire
@@ -101,30 +105,38 @@ Aplikasi telah disiapkan dengan arsitektur **Standby Repositories** di folder `l
    ```bash
    flutterfire configure
    ```
-   Perintah ini akan secara otomatis mengunduh `android/app/google-services.json` dan memperbarui `lib/firebase_options.dart`.
+   Perintah ini akan menghasilkan `android/app/google-services.json` dan `lib/firebase_options.dart` (keduanya diabaikan dari Git lewat `.gitignore`).
 
-### Langkah 4: Tambahkan Paket Firebase ke `pubspec.yaml`
-Jalankan:
-```bash
-flutter pub add firebase_core firebase_auth cloud_firestore google_sign_in
-```
+---
 
-### Langkah 5: Aktifkan Repositori di Kode Aplikasi
-1. Di `lib/main.dart`, tambahkan inisialisasi Firebase sebelum `runApp`:
-   ```dart
-   WidgetsFlutterBinding.ensureInitialized();
-   await Firebase.initializeApp(
-     options: DefaultFirebaseOptions.currentPlatform,
-   );
+## 🔄 Panduan Rilis & Auto-Update Aplikasi via Firebase
+
+SmartFi Mobile dilengkapi fitur **In-App Auto-Update** yang terhubung secara *real-time* ke Cloud Firestore (dokumen `app_config/android`). Saat Anda merilis versi baru, aplikasi akan otomatis mendeteksi pembaruan, menampilkan catatan rilis, mengunduh APK langsung di dalam aplikasi dengan progress bar, dan membuka installer Android.
+
+### Langkah Merilis Versi Baru
+1. Naikkan versi pada `pubspec.yaml`, contoh dari `version: 1.0.0+1` menjadi `version: 1.1.0+2` (`1.1.0` = `latestVersion`, `2` = `latestBuildNumber`).
+2. Build APK release bertanda tangan yang sama (`android/key.properties`):
+   ```bash
+   flutter build apk --release --dart-define-from-file=env.json
    ```
-2. Di file provider:
-   - Ganti `DummyAuthRepository` dengan `FirebaseAuthRepository` di `lib/features/auth/providers/auth_provider.dart`.
-   - Ganti `DummyTransactionRepository` dengan `FirebaseTransactionRepository` di `lib/features/transactions/providers/transaction_provider.dart`.
-   - Ganti `DummyCategoryRepository` dengan `FirebaseCategoryRepository` di `lib/features/categories/providers/category_provider.dart`.
-3. Buka komentar implementasi Firestore di dalam:
-   - `lib/data/repositories/firebase/firebase_auth_repository.dart`
-   - `lib/data/repositories/firebase/firebase_transaction_repository.dart`
-   - `lib/data/repositories/firebase/firebase_category_repository.dart`
+3. Unggah file `build/app/outputs/flutter-apk/app-release.apk` ke hosting direct-link (misal **GitHub Releases**, **Firebase Storage**, atau server pribadi Anda) dan salin direct URL `.apk`.
+4. Pastikan aturan keamanan terbaru (`app_config/{docId}`) sudah di-deploy ke Firestore:
+   ```bash
+   firebase deploy --only firestore:rules
+   ```
+5. Di **Firebase Console → Cloud Firestore**, buat/perbarui dokumen `app_config/android` dengan field:
+   ```json
+   {
+     "latestVersion": "1.1.0",
+     "latestBuildNumber": 2,
+     "minSupportedBuildNumber": 1,
+     "forceUpdate": false,
+     "releaseNotes": "- Perbaikan performa & tampilan\n- Fitur baru SmartFi",
+     "downloadUrl": "https://github.com/ORG/REPO/releases/download/v1.1.0/app-release.apk"
+   }
+   ```
+   - Set `forceUpdate: true` atau naikkan `minSupportedBuildNumber` untuk mewajibkan pengguna lama memperbarui sebelum melanjutkan.
+   - Pengguna juga dapat memeriksa pembaruan secara manual lewat menu **Pengaturan → Pembaruan Aplikasi**.
 
 ---
 
@@ -144,7 +156,7 @@ smartfi-mobile/
 │   ├── core/
 │   │   ├── config/ (ai_config.dart, ai_prompts.dart)
 │   │   ├── router/ (app_router.dart)
-│   │   ├── services/ (audio_service.dart)
+│   │   ├── services/ (audio_service.dart, notification_service.dart)
 │   │   ├── theme/ (neo_colors.dart, neo_theme.dart)
 │   │   └── utils/ (currency_formatter.dart, date_formatter.dart, validators.dart)
 │   ├── data/
@@ -155,6 +167,7 @@ smartfi-mobile/
 │   │   │   └── openai/ (openai_ai_repository.dart)
 │   │   └── services/ (pdf_export_service.dart, csv_export_service.dart)
 │   ├── features/
+│   │   ├── main/
 │   │   ├── auth/
 │   │   ├── dashboard/
 │   │   ├── transactions/
@@ -163,7 +176,8 @@ smartfi-mobile/
 │   │   ├── reports/
 │   │   └── settings/
 │   ├── shared/
-│   │   └── widgets/ (neo_button, neo_card, neo_input, neo_modal, neo_badge, blueprint_background)
+│   │   └── widgets/ (neo_app_bar, neo_button, neo_card, neo_input, neo_modal, neo_badge, blueprint_background)
+│   ├── app.dart
 │   ├── firebase_options.dart
 │   └── main.dart
 ├── env.example.json

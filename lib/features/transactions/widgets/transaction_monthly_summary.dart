@@ -48,26 +48,30 @@ class TransactionMonthlySummary extends StatelessWidget {
       100000.0,
     ].reduce((a, b) => a > b ? a : b);
 
+    final textCol = NeoColors.text(context);
+    final mutedCol = NeoColors.mutedText(context);
+    final borderCol = NeoColors.border(context);
+
     return NeoCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'SALDO TERKINI',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w900,
               letterSpacing: 0.5,
-              color: NeoColors.textMuted,
+              color: mutedCol,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             CurrencyFormatter.formatRupiah(saldoTerkini),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.w900,
-              color: NeoColors.primaryBlue,
+              color: NeoColors.blueAccentText(context),
             ),
           ),
           const SizedBox(height: 16),
@@ -80,13 +84,13 @@ class TransactionMonthlySummary extends StatelessWidget {
                 maxY: maxY * 1.15,
                 barTouchData: BarTouchData(
                   touchTooltipData: BarTouchTooltipData(
-                    getTooltipColor: (_) => NeoColors.surfaceLight,
+                    getTooltipColor: (_) => NeoColors.surface(context),
                     getTooltipItem: (group, groupIndex, rod, rodIndex) {
                       final label = rodIndex == 0 ? 'Pemasukan' : 'Pengeluaran';
                       return BarTooltipItem(
                         '$label\n${CurrencyFormatter.formatRupiah(rod.toY.toInt())}',
-                        const TextStyle(
-                          color: NeoColors.textDark,
+                        TextStyle(
+                          color: textCol,
                           fontWeight: FontWeight.w800,
                           fontSize: 12,
                         ),
@@ -101,15 +105,19 @@ class TransactionMonthlySummary extends StatelessWidget {
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
+                      interval: 1,
                       getTitlesWidget: (val, meta) {
+                        if (val % 1 != 0 || val.toInt() != 0) {
+                          return const SizedBox.shrink();
+                        }
                         return Padding(
                           padding: const EdgeInsets.only(top: 6.0),
                           child: Text(
                             'BULAN INI',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w900,
-                              color: NeoColors.textDark,
+                              color: textCol,
                             ),
                           ),
                         );
@@ -120,8 +128,8 @@ class TransactionMonthlySummary extends StatelessWidget {
                 gridData: const FlGridData(show: false),
                 borderData: FlBorderData(
                   show: true,
-                  border: const Border(
-                    bottom: BorderSide(color: NeoColors.black, width: 2),
+                  border: Border(
+                    bottom: BorderSide(color: borderCol, width: 2),
                   ),
                 ),
                 barGroups: [
@@ -134,14 +142,14 @@ class TransactionMonthlySummary extends StatelessWidget {
                         color: NeoColors.successGreenLight,
                         width: 28,
                         borderRadius: BorderRadius.zero,
-                        borderSide: const BorderSide(color: NeoColors.black, width: 2),
+                        borderSide: BorderSide(color: borderCol, width: 2),
                       ),
                       BarChartRodData(
                         toY: pengeluaranBulanIni.toDouble(),
                         color: NeoColors.dangerRedLight,
                         width: 28,
                         borderRadius: BorderRadius.zero,
-                        borderSide: const BorderSide(color: NeoColors.black, width: 2),
+                        borderSide: BorderSide(color: borderCol, width: 2),
                       ),
                     ],
                   ),
@@ -160,34 +168,40 @@ class TransactionMonthlySummary extends StatelessWidget {
               boxShadow: NeoColors.hardShadow(offset: 2),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: NeoColors.surfaceLight,
-                        border: Border.all(color: NeoColors.black, width: 2),
-                      ),
-                      child: const Icon(Icons.arrow_downward, size: 16, color: NeoColors.black),
-                    ),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'TOTAL PEMASUKAN',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 11,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: NeoColors.surfaceLight,
+                    border: Border.all(color: NeoColors.black, width: 2),
+                  ),
+                  child: const Icon(Icons.arrow_downward, size: 16, color: NeoColors.black),
                 ),
-                Text(
-                  CurrencyFormatter.formatRupiah(pemasukanBulanIni),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 14,
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'TOTAL PEMASUKAN',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11,
+                      letterSpacing: 0.5,
+                      color: NeoColors.textDark,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    CurrencyFormatter.formatRupiah(pemasukanBulanIni),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                      color: NeoColors.textDark,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -204,34 +218,40 @@ class TransactionMonthlySummary extends StatelessWidget {
               boxShadow: NeoColors.hardShadow(offset: 2),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: NeoColors.surfaceLight,
-                        border: Border.all(color: NeoColors.black, width: 2),
-                      ),
-                      child: const Icon(Icons.arrow_upward, size: 16, color: NeoColors.black),
-                    ),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'TOTAL PENGELUARAN',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 11,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: NeoColors.surfaceLight,
+                    border: Border.all(color: NeoColors.black, width: 2),
+                  ),
+                  child: const Icon(Icons.arrow_upward, size: 16, color: NeoColors.black),
                 ),
-                Text(
-                  CurrencyFormatter.formatRupiah(pengeluaranBulanIni),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 14,
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'TOTAL PENGELUARAN',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11,
+                      letterSpacing: 0.5,
+                      color: NeoColors.textDark,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    CurrencyFormatter.formatRupiah(pengeluaranBulanIni),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                      color: NeoColors.textDark,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],

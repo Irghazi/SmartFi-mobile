@@ -4,8 +4,8 @@ import '../../core/theme/neo_colors.dart';
 
 class NeoCard extends StatefulWidget {
   final Widget child;
-  final Color backgroundColor;
-  final Color borderColor;
+  final Color? backgroundColor;
+  final Color? borderColor;
   final double borderWidth;
   final double shadowOffset;
   final EdgeInsetsGeometry padding;
@@ -14,8 +14,8 @@ class NeoCard extends StatefulWidget {
   const NeoCard({
     super.key,
     required this.child,
-    this.backgroundColor = NeoColors.surfaceLight,
-    this.borderColor = NeoColors.black,
+    this.backgroundColor,
+    this.borderColor,
     this.borderWidth = 4.0,
     this.shadowOffset = 8.0,
     this.padding = const EdgeInsets.all(16.0),
@@ -37,21 +37,32 @@ class _NeoCardState extends State<NeoCard> {
         ? Offset(widget.shadowOffset - 2.0, widget.shadowOffset - 2.0)
         : Offset.zero;
 
+    final bgColor = widget.backgroundColor ?? NeoColors.surface(context);
+    final bColor = widget.borderColor ??
+        (widget.backgroundColor == null ? NeoColors.border(context) : NeoColors.black);
+    final isDarkBg =
+        ThemeData.estimateBrightnessForColor(bgColor) == Brightness.dark;
+
     Widget card = AnimatedContainer(
       duration: const Duration(milliseconds: 60),
       padding: widget.padding,
       decoration: BoxDecoration(
-        color: widget.backgroundColor,
+        color: bgColor,
         border: Border.all(
-          color: widget.borderColor,
+          color: bColor,
           width: widget.borderWidth,
         ),
         boxShadow: NeoColors.hardShadow(
           offset: currentOffset,
-          color: widget.borderColor,
+          color: NeoColors.shadow(context),
         ),
       ),
-      child: widget.child,
+      child: DefaultTextStyle.merge(
+        style: TextStyle(
+          color: isDarkBg ? NeoColors.textLight : NeoColors.textDark,
+        ),
+        child: widget.child,
+      ),
     );
 
     if (!isClickable) return card;

@@ -55,7 +55,10 @@ class DummyAuthRepository implements AuthRepository {
   }
 
   @override
-  Stream<AppUser?> authStateChanges() => _authStateController.stream;
+  Stream<AppUser?> authStateChanges() async* {
+    yield await getCurrentUser();
+    yield* _authStateController.stream;
+  }
 
   @override
   Future<AppUser> signInWithEmailPassword(String email, String password) async {

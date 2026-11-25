@@ -16,7 +16,7 @@ class NeoInput extends StatefulWidget {
   final int maxLines;
   final FocusNode? focusNode;
   final String? errorText;
-  final Color backgroundColor;
+  final Color? backgroundColor;
 
   const NeoInput({
     super.key,
@@ -34,7 +34,7 @@ class NeoInput extends StatefulWidget {
     this.maxLines = 1,
     this.focusNode,
     this.errorText,
-    this.backgroundColor = NeoColors.surfaceLight,
+    this.backgroundColor,
   });
 
   @override
@@ -72,6 +72,12 @@ class _NeoInputState extends State<NeoInput> {
   Widget build(BuildContext context) {
     final shadowOffset = _isFocused ? 4.0 : 0.0;
     final hasError = widget.errorText != null && widget.errorText!.isNotEmpty;
+    final effectiveBg = widget.enabled
+        ? (widget.backgroundColor ?? NeoColors.surface(context))
+        : NeoColors.disabledSurface(context);
+    final isDarkField =
+        ThemeData.estimateBrightnessForColor(effectiveBg) == Brightness.dark;
+    final borderCol = hasError ? NeoColors.dangerRed : NeoColors.border(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -80,8 +86,8 @@ class _NeoInputState extends State<NeoInput> {
         if (widget.label != null) ...[
           Text(
             widget.label!.toUpperCase(),
-            style: const TextStyle(
-              color: NeoColors.textDark,
+            style: TextStyle(
+              color: NeoColors.text(context),
               fontWeight: FontWeight.w900,
               fontSize: 12,
               letterSpacing: 0.8,
@@ -92,16 +98,14 @@ class _NeoInputState extends State<NeoInput> {
         AnimatedContainer(
           duration: const Duration(milliseconds: 100),
           decoration: BoxDecoration(
-            color: widget.enabled
-                ? widget.backgroundColor
-                : const Color(0xFFE5E7EB),
+            color: effectiveBg,
             border: Border.all(
-              color: hasError ? NeoColors.dangerRed : NeoColors.black,
+              color: borderCol,
               width: 2.0,
             ),
             boxShadow: NeoColors.hardShadow(
               offset: shadowOffset,
-              color: hasError ? NeoColors.dangerRed : NeoColors.black,
+              color: hasError ? NeoColors.dangerRed : NeoColors.shadow(context),
             ),
           ),
           child: TextFormField(
@@ -114,16 +118,16 @@ class _NeoInputState extends State<NeoInput> {
             maxLines: widget.maxLines,
             onChanged: widget.onChanged,
             validator: widget.validator,
-            style: const TextStyle(
-              color: NeoColors.textDark,
+            style: TextStyle(
+              color: isDarkField ? NeoColors.textLight : NeoColors.textDark,
               fontWeight: FontWeight.w700,
               fontSize: 15,
             ),
             decoration: InputDecoration(
               isDense: true,
               hintText: widget.hintText,
-              hintStyle: const TextStyle(
-                color: Color(0xFF9CA3AF),
+              hintStyle: TextStyle(
+                color: isDarkField ? const Color(0xFFA1A1AA) : const Color(0xFF9CA3AF),
                 fontWeight: FontWeight.w600,
                 fontSize: 14,
               ),

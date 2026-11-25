@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../../models/category_model.dart';
 import '../../models/user_model.dart';
@@ -12,13 +13,112 @@ class FirebaseAuthRepository implements AuthRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
 
+  // Gate untuk mencegah race condition antara authStateChanges() dan signUp()
+  Completer<void>? _signUpGate;
+
   FirebaseAuthRepository();
+
+  String _mapError(Object error) {
+    if (error is FirebaseAuthException) {
+      switch (error.code) {
+        case 'user-not-found':
+        case 'wrong-password':
+        case 'invalid-credential':
+          return 'Email atau kata sandi salah. Silakan periksa kembali.';
+        case 'invalid-email':
+          return 'Format alamat email tidak valid.';
+        case 'email-already-in-use':
+          return 'Email ini sudah terdaftar. Silakan masuk dengan akun Anda.';
+        case 'weak-password':
+          return 'Kata sandi terlalu lemah. Gunakan minimal 6 karakter.';
+        case 'user-disabled':
+          return 'Akun ini telah dinonaktifkan.';
+        case 'too-many-requests':
+          return 'Terlalu banyak percobaan gagal. Tunggu sebentar lalu coba lagi.';
+        case 'network-request-failed':
+          return 'Gagal terhubung ke internet. Periksa koneksi jaringan Anda.';
+        case 'account-exists-with-different-credential':
+          return 'Akun dengan email ini sudah terdaftar menggunakan metode masuk lain.';
+        default:
+          return error.message ?? 'Terjadi kesalahan autentikasi (${error.code}).';
+      }
+    }
+    if (error is FirebaseException) {
+      if (error.code == 'unavailable') {
+        return 'Layanan server sedang sibuk atau offline. Coba beberapa saat lagi.';
+      }
+      if (error.code == 'permission-denied') {
+        return 'Akses ditolak oleh server. Pastikan Anda sudah masuk dengan akun yang benar.';
+      }
+      return error.message ?? 'Terjadi kesalahan Firebase (${error.code}).';
+    }
+    if (error is PlatformException) {
+      final msg = '${error.code} ${error.message ?? ''}'.toLowerCase();
+      if (msg.contains('sign_in_canceled') || msg.contains('canceled')) {
+        return 'Proses masuk dengan Google dibatalkan pengguna.';
+      }
+      if (msg.contains('network_error') || msg.contains('7:')) {
+        return 'Koneksi internet bermasalah saat masuk dengan Google.';
+      }
+      if (msg.contains('10:') || msg.contains('sign_in_failed')) {
+        return 'Login Google gagal (Kode 10): pastikan SHA-1 perangkat/release sudah terdaftar di Firebase Console dan google-services.json telah diperbarui.';
+      }
+      return error.message ?? 'Gagal masuk dengan Google (${error.code}).';
+    }
+    return error.toString().replaceFirst('Exception: ', '');
+  }
+
+  AppUser _appUserFromDoc(User firebaseUser, Map<String, dynamic> data) {
+    return AppUser.fromJson({
+      ...data,
+      'id': firebaseUser.uid,
+      'email': firebaseUser.email ?? data['email'] ?? '',
+      'name': (data['name'] as String?)?.trim().isNotEmpty == true
+          ? data['name']
+          : (firebaseUser.displayName?.trim().isNotEmpty == true
+              ? firebaseUser.displayName
+              : 'Pengguna SmartFi'),
+      'avatarUrl': data['avatarUrl'] ?? firebaseUser.photoURL,
+    });
+  }
 
   @override
   Stream<AppUser?> authStateChanges() {
-    return _auth.authStateChanges().asyncMap((firebaseUser) async {
-      if (firebaseUser == null) return null;
-      return _getOrFetchUserProfile(firebaseUser);
+    return _auth.authStateChanges().asyncExpand((firebaseUser) {
+      if (firebaseUser == null) return Stream<AppUser?>.value(null);
+
+      return Stream<AppUser?>.multi((controller) async {
+        try {
+          final initial = await _getOrFetchUserProfile(firebaseUser);
+          if (!controller.isClosed) controller.add(initial);
+        } catch (_) {
+          if (!controller.isClosed) {
+            controller.add(AppUser(
+              id: firebaseUser.uid,
+              name: firebaseUser.displayName ?? 'Pengguna SmartFi',
+              email: firebaseUser.email ?? '',
+              targetSavings: 5000000,
+              avatarUrl: firebaseUser.photoURL,
+              isTrial: false,
+            ));
+          }
+        }
+
+        final sub = _firestore
+            .collection('users')
+            .doc(firebaseUser.uid)
+            .snapshots()
+            .listen(
+          (snap) {
+            if (!controller.isClosed && snap.exists && snap.data() != null) {
+              controller.add(_appUserFromDoc(firebaseUser, snap.data()!));
+            }
+          },
+          onError: (_) {},
+        );
+
+        controller.onCancel = sub.cancel;
+      });
     });
   }
 
@@ -30,29 +130,53 @@ class FirebaseAuthRepository implements AuthRepository {
   }
 
   Future<AppUser> _getOrFetchUserProfile(User firebaseUser) async {
-    final userDocRef = _firestore.collection('users').doc(firebaseUser.uid);
-    final docSnapshot = await userDocRef.get();
-
-    if (docSnapshot.exists && docSnapshot.data() != null) {
-      final data = docSnapshot.data()!;
-      return AppUser.fromJson({
-        ...data,
-        'id': firebaseUser.uid,
-        'email': firebaseUser.email ?? data['email'] ?? '',
-        'name': data['name'] ?? firebaseUser.displayName ?? 'Pengguna SmartFi',
-      });
+    final pendingGate = _signUpGate;
+    if (pendingGate != null && !pendingGate.isCompleted) {
+      await pendingGate.future;
+      await firebaseUser.reload().catchError((_) {});
     }
 
-    // Jika belum ada profil di Firestore, buat profil baru + kategori bawaan
+    final refreshedUser = _auth.currentUser ?? firebaseUser;
+    final userDocRef = _firestore.collection('users').doc(refreshedUser.uid);
+    DocumentSnapshot<Map<String, dynamic>>? docSnapshot;
+
+    try {
+      docSnapshot = await userDocRef.get().timeout(const Duration(seconds: 6));
+    } catch (_) {
+      try {
+        docSnapshot = await userDocRef.get(const GetOptions(source: Source.cache));
+      } catch (_) {}
+    }
+
+    if (docSnapshot != null && docSnapshot.exists && docSnapshot.data() != null) {
+      return _appUserFromDoc(refreshedUser, docSnapshot.data()!);
+    }
+
+    if (docSnapshot == null) {
+      return AppUser(
+        id: refreshedUser.uid,
+        name: refreshedUser.displayName ?? 'Pengguna SmartFi',
+        email: refreshedUser.email ?? '',
+        targetSavings: 5000000,
+        reminderEnabled: false,
+        reminderTime: '08:00',
+        reminderTimezone: 'Asia/Jakarta',
+        avatarUrl: refreshedUser.photoURL,
+        isTrial: false,
+      );
+    }
+
     return _initializeNewUser(
-      uid: firebaseUser.uid,
-      name: firebaseUser.displayName ?? 'Pengguna SmartFi',
-      email: firebaseUser.email ?? '',
-      avatarUrl: firebaseUser.photoURL,
+      uid: refreshedUser.uid,
+      name: (refreshedUser.displayName?.trim().isNotEmpty == true)
+          ? refreshedUser.displayName!.trim()
+          : 'Pengguna SmartFi',
+      email: refreshedUser.email ?? '',
+      avatarUrl: refreshedUser.photoURL,
     );
   }
 
-  /// Membuat profil pengguna dan kategori bawaan dalam satu batched write
+  /// Membuat profil pengguna dan kategori bawaan dalam satu batched write (idempoten)
   Future<AppUser> _initializeNewUser({
     required String uid,
     required String name,
@@ -60,11 +184,19 @@ class FirebaseAuthRepository implements AuthRepository {
     String? avatarUrl,
   }) async {
     final userDocRef = _firestore.collection('users').doc(uid);
+    try {
+      final existing = await userDocRef.get().timeout(const Duration(seconds: 4));
+      if (existing.exists && existing.data() != null) {
+        return AppUser.fromJson({...existing.data()!, 'id': uid});
+      }
+    } catch (_) {}
+
     final batch = _firestore.batch();
+    final cleanName = name.trim().isNotEmpty ? name.trim() : 'Pengguna SmartFi';
 
     final userData = {
       'id': uid,
-      'name': name,
+      'name': cleanName,
       'email': email,
       'targetSavings': 5000000,
       'reminderEnabled': false,
@@ -76,29 +208,35 @@ class FirebaseAuthRepository implements AuthRepository {
     };
 
     // 1. Buat dokumen user
-    batch.set(userDocRef, userData);
+    batch.set(userDocRef, userData, SetOptions(merge: true));
 
-    // 2. Buat kategori default dalam batch yang sama
+    // 2. Buat kategori default dengan ID deterministik agar tidak pernah duplikat
     final categoriesCol = userDocRef.collection('categories');
     for (final defCat in CategoryModel.defaultCategories) {
-      final catDoc = categoriesCol.doc();
-      batch.set(catDoc, {
-        'id': catDoc.id,
-        'userId': uid,
-        'name': defCat.name,
-        'type': defCat.type,
-        'iconName': defCat.iconName,
-        'colorHex': defCat.colorHex,
-        'isDefault': true,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      final catDoc = categoriesCol.doc(defCat.id);
+      batch.set(
+        catDoc,
+        {
+          'id': defCat.id,
+          'userId': uid,
+          'name': defCat.name,
+          'type': defCat.type,
+          'iconName': defCat.iconName,
+          'colorHex': defCat.colorHex,
+          'isDefault': true,
+          'createdAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
     }
 
-    await batch.commit();
+    try {
+      await batch.commit().timeout(const Duration(seconds: 6));
+    } catch (_) {}
 
     return AppUser(
       id: uid,
-      name: name,
+      name: cleanName,
       email: email,
       targetSavings: 5000000,
       reminderEnabled: false,
@@ -111,46 +249,64 @@ class FirebaseAuthRepository implements AuthRepository {
 
   @override
   Future<AppUser> signInWithEmailPassword(String email, String password) async {
-    final credential = await _auth.signInWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
-    );
-    final user = credential.user!;
-    return _getOrFetchUserProfile(user);
+    try {
+      final credential = await _auth.signInWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      final user = credential.user!;
+      return await _getOrFetchUserProfile(user);
+    } catch (e) {
+      throw Exception(_mapError(e));
+    }
   }
 
   @override
   Future<AppUser> signInWithGoogle() async {
-    final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-    if (googleUser == null) {
-      throw Exception('Proses masuk dengan Google dibatalkan pengguna.');
+    try {
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) {
+        throw Exception('Proses masuk dengan Google dibatalkan pengguna.');
+      }
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final OAuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final userCredential = await _auth.signInWithCredential(credential);
+      final user = userCredential.user!;
+      return await _getOrFetchUserProfile(user);
+    } catch (e) {
+      throw Exception(_mapError(e));
     }
-
-    final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-    final OAuthCredential credential = GoogleAuthProvider.credential(
-      accessToken: googleAuth.accessToken,
-      idToken: googleAuth.idToken,
-    );
-
-    final userCredential = await _auth.signInWithCredential(credential);
-    final user = userCredential.user!;
-    return _getOrFetchUserProfile(user);
   }
 
   @override
   Future<AppUser> signUp(String name, String email, String password) async {
-    final credential = await _auth.createUserWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
-    );
-    final user = credential.user!;
-    await user.updateDisplayName(name);
+    final gate = Completer<void>();
+    _signUpGate = gate;
+    try {
+      final cleanName = name.trim().isNotEmpty ? name.trim() : 'Pengguna SmartFi';
+      final credential = await _auth.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      final user = credential.user!;
+      await user.updateDisplayName(cleanName);
 
-    return _initializeNewUser(
-      uid: user.uid,
-      name: name,
-      email: email.trim(),
-    );
+      return await _initializeNewUser(
+        uid: user.uid,
+        name: cleanName,
+        email: email.trim(),
+      );
+    } catch (e) {
+      throw Exception(_mapError(e));
+    } finally {
+      if (!gate.isCompleted) gate.complete();
+      if (identical(_signUpGate, gate)) _signUpGate = null;
+    }
   }
 
   @override
@@ -161,27 +317,38 @@ class FirebaseAuthRepository implements AuthRepository {
     String? reminderTime,
   }) async {
     final user = _auth.currentUser;
-    if (user == null) return;
-
-    final updates = <String, dynamic>{
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-
-    if (name != null && name.trim().isNotEmpty) {
-      await user.updateDisplayName(name.trim());
-      updates['name'] = name.trim();
-    }
-    if (targetSavings != null) {
-      updates['targetSavings'] = targetSavings;
-    }
-    if (reminderEnabled != null) {
-      updates['reminderEnabled'] = reminderEnabled;
-    }
-    if (reminderTime != null) {
-      updates['reminderTime'] = reminderTime;
+    if (user == null) {
+      throw Exception('Sesi login tidak ditemukan. Silakan masuk kembali.');
     }
 
-    await _firestore.collection('users').doc(user.uid).update(updates);
+    try {
+      final updates = <String, dynamic>{
+        'id': user.uid,
+        'email': user.email ?? '',
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (name != null && name.trim().isNotEmpty) {
+        await user.updateDisplayName(name.trim());
+        updates['name'] = name.trim();
+      }
+      if (targetSavings != null) {
+        updates['targetSavings'] = targetSavings;
+      }
+      if (reminderEnabled != null) {
+        updates['reminderEnabled'] = reminderEnabled;
+      }
+      if (reminderTime != null) {
+        updates['reminderTime'] = reminderTime;
+      }
+
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .set(updates, SetOptions(merge: true));
+    } catch (e) {
+      throw Exception(_mapError(e));
+    }
   }
 
   @override

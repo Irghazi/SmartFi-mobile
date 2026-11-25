@@ -1,7 +1,14 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
+
+    // Konfigurasi aplikasi publik (mis. versi terbaru di app_config/android)
+    // Hanya dapat dibaca aplikasi; pembaruan dilakukan via Firebase Console / Admin SDK
+    match /app_config/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Setiap dokumen pengguna hanya dapat diakses oleh pemilik akun
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;

@@ -13,6 +13,10 @@ class ThemeSettingsCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
     final isDark = settings.themeMode == 'dark';
+    final textCol = NeoColors.text(context);
+    final mutedCol = NeoColors.mutedText(context);
+    final borderCol = NeoColors.border(context);
+    final secondaryCol = NeoColors.surfaceSecondary(context);
 
     return NeoCard(
       child: Column(
@@ -24,34 +28,36 @@ class ThemeSettingsCard extends ConsumerWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: NeoColors.bgLight,
-                  border: Border.all(color: NeoColors.black, width: 2),
+                  color: NeoColors.headerBg(context),
+                  border: Border.all(color: borderCol, width: 2),
                   boxShadow: NeoColors.hardShadow(offset: 2),
                 ),
-                child: const Icon(Icons.palette, color: NeoColors.black, size: 20),
+                child: Icon(Icons.palette, color: textCol, size: 20),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'TEMA TAMPILAN',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.5,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'TEMA TAMPILAN',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
                     ),
-                  ),
-                  Text(
-                    'SESUAIKAN DENGAN KENYAMANAN MATA',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      color: NeoColors.textMuted,
-                      letterSpacing: 0.3,
+                    Text(
+                      'SESUAIKAN DENGAN KENYAMANAN MATA',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: mutedCol,
+                        letterSpacing: 0.3,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -67,8 +73,8 @@ class ThemeSettingsCard extends ConsumerWidget {
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: !isDark ? NeoColors.yellowAccent : NeoColors.white,
-                      border: Border.all(color: NeoColors.black, width: 2),
+                      color: !isDark ? NeoColors.yellowAccent : secondaryCol,
+                      border: Border.all(color: !isDark ? NeoColors.black : borderCol, width: 2),
                       boxShadow: NeoColors.hardShadow(offset: 2),
                     ),
                     child: Row(
@@ -77,12 +83,16 @@ class ThemeSettingsCard extends ConsumerWidget {
                         Icon(
                           !isDark ? Icons.wb_sunny : Icons.wb_sunny_outlined,
                           size: 18,
-                          color: NeoColors.black,
+                          color: !isDark ? NeoColors.black : textCol,
                         ),
                         const SizedBox(width: 6),
-                        const Text(
+                        Text(
                           'TERANG',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: !isDark ? NeoColors.textDark : textCol,
+                          ),
                         ),
                       ],
                     ),
@@ -99,8 +109,8 @@ class ThemeSettingsCard extends ConsumerWidget {
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: isDark ? NeoColors.yellowAccent : NeoColors.white,
-                      border: Border.all(color: NeoColors.black, width: 2),
+                      color: isDark ? NeoColors.yellowAccent : secondaryCol,
+                      border: Border.all(color: isDark ? NeoColors.black : borderCol, width: 2),
                       boxShadow: NeoColors.hardShadow(offset: 2),
                     ),
                     child: Row(
@@ -109,12 +119,16 @@ class ThemeSettingsCard extends ConsumerWidget {
                         Icon(
                           isDark ? Icons.nightlight_round : Icons.nightlight_round_outlined,
                           size: 18,
-                          color: NeoColors.black,
+                          color: isDark ? NeoColors.black : textCol,
                         ),
                         const SizedBox(width: 6),
-                        const Text(
+                        Text(
                           'GELAP',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: isDark ? NeoColors.textDark : textCol,
+                          ),
                         ),
                       ],
                     ),

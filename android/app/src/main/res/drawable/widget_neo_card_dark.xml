@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Hard shadow Neobrutalism -->
+    <item android:left="4dp" android:top="4dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#000000" />
+        </shape>
+    </item>
+    <!-- Permukaan kartu gelap (Zinc 800) dengan border abu terang 3dp -->
+    <item android:right="4dp" android:bottom="4dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#27272A" />
+            <stroke android:width="3dp" android:color="#A1A1AA" />
+        </shape>
+    </item>
+</layer-list>

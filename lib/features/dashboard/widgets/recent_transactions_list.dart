@@ -17,6 +17,8 @@ class RecentTransactionsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final recent5 = transactions.take(5).toList();
+    final borderCol = NeoColors.border(context);
+    final mutedCol = NeoColors.mutedText(context);
 
     return NeoCard(
       padding: EdgeInsets.zero,
@@ -26,9 +28,9 @@ class RecentTransactionsList extends StatelessWidget {
           // Header Neobrutalism
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(
-              color: NeoColors.bgLight,
-              border: Border(bottom: BorderSide(color: NeoColors.black, width: 4)),
+            decoration: BoxDecoration(
+              color: NeoColors.headerBg(context),
+              border: Border(bottom: BorderSide(color: borderCol, width: 4)),
             ),
             child: const Text(
               'RIWAYAT TRANSAKSI TERAKHIR',
@@ -41,12 +43,12 @@ class RecentTransactionsList extends StatelessWidget {
           ),
 
           if (recent5.isEmpty) ...[
-            const Padding(
-              padding: EdgeInsets.all(24.0),
+            Padding(
+              padding: const EdgeInsets.all(24.0),
               child: Center(
                 child: Text(
                   'Belum ada transaksi yang dicatat.',
-                  style: TextStyle(fontWeight: FontWeight.w800, color: NeoColors.textMuted),
+                  style: TextStyle(fontWeight: FontWeight.w800, color: mutedCol),
                 ),
               ),
             ),
@@ -55,57 +57,65 @@ class RecentTransactionsList extends StatelessWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: recent5.length,
-              separatorBuilder: (_, __) => const Divider(color: NeoColors.black, height: 2, thickness: 2),
+              separatorBuilder: (_, __) => Divider(color: borderCol, height: 2, thickness: 2),
               itemBuilder: (context, index) {
                 final tx = recent5[index];
                 final isIncome = tx.isIncome;
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Tanggal & Kategori
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Row(
                         children: [
-                          Text(
-                            DateFormatter.formatTanggalPendek(tx.transactionDate),
-                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
+                          Expanded(
+                            child: Text(
+                              tx.description,
+                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                          const SizedBox(height: 4),
-                          NeoBadge(
-                            text: tx.categoryName,
-                            fontSize: 9,
-                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(width: 12),
-
-                      // Deskripsi
-                      Expanded(
-                        child: Text(
-                          tx.description,
-                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-
-                      // Nominal
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
+                          const SizedBox(width: 10),
                           Text(
                             '${isIncome ? '+' : '-'} ${CurrencyFormatter.formatRupiah(tx.nominal)}',
                             style: TextStyle(
                               fontWeight: FontWeight.w900,
                               fontSize: 12,
-                              color: isIncome ? NeoColors.successGreen : NeoColors.dangerRed,
+                              color: isIncome
+                                  ? NeoColors.incomeText(context)
+                                  : NeoColors.expenseText(context),
                             ),
                           ),
-                          const SizedBox(height: 3),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(
+                                  DateFormatter.formatTanggalPendek(tx.transactionDate),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 10,
+                                    color: mutedCol,
+                                  ),
+                                ),
+                                NeoBadge(
+                                  text: tx.categoryName,
+                                  fontSize: 9,
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
                           const NeoBadge(
                             text: 'Selesai',
                             backgroundColor: NeoColors.successGreenLight,

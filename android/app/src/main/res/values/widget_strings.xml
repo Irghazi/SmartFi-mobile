@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_name">SmartFi Ringkasan (4x2)</string>
+    <string name="widget_description">Lihat saldo terkini, arus kas bulan ini, progress target tabungan, dan catat transaksi AI dengan 1 ketukan.</string>
+</resources>

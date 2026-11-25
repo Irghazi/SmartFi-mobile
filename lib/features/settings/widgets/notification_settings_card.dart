@@ -19,6 +19,7 @@ class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsC
   String _timeStr = '08:00';
   bool _isInit = false;
   bool _isLoading = false;
+  bool _hasEdited = false;
 
   @override
   void didChangeDependencies() {
@@ -39,18 +40,27 @@ class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsC
       minute: parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
     );
 
+    final isDark = NeoColors.isDark(context);
+
     final picked = await showTimePicker(
       context: context,
       initialTime: initialTime,
       builder: (context, child) {
         return Theme(
-          data: ThemeData.light().copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: NeoColors.primaryBlue,
-              onPrimary: NeoColors.white,
-              surface: NeoColors.surfaceLight,
-              onSurface: NeoColors.black,
-            ),
+          data: (isDark ? ThemeData.dark() : ThemeData.light()).copyWith(
+            colorScheme: isDark
+                ? const ColorScheme.dark(
+                    primary: NeoColors.primaryBlue,
+                    onPrimary: NeoColors.white,
+                    surface: NeoColors.surfaceDark,
+                    onSurface: NeoColors.textLight,
+                  )
+                : const ColorScheme.light(
+                    primary: NeoColors.primaryBlue,
+                    onPrimary: NeoColors.white,
+                    surface: NeoColors.surfaceLight,
+                    onSurface: NeoColors.black,
+                  ),
           ),
           child: child!,
         );
@@ -60,7 +70,10 @@ class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsC
     if (picked != null) {
       final hour = picked.hour.toString().padLeft(2, '0');
       final min = picked.minute.toString().padLeft(2, '0');
-      setState(() => _timeStr = '$hour:$min');
+      setState(() {
+        _hasEdited = true;
+        _timeStr = '$hour:$min';
+      });
     }
   }
 
@@ -71,11 +84,21 @@ class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsC
             isActive: _isActive,
             time: _timeStr,
           );
+      _hasEdited = false;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Pengaturan pengingat berhasil diperbarui!'),
             backgroundColor: NeoColors.successGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memperbarui pengingat: ${e.toString().replaceFirst('Exception: ', '')}'),
+            backgroundColor: NeoColors.dangerRed,
           ),
         );
       }
@@ -86,6 +109,20 @@ class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsC
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(settingsProvider, (_, next) {
+      if (!_hasEdited) {
+        setState(() {
+          _isActive = next.isReminderActive;
+          _timeStr = next.reminderTime;
+        });
+      }
+    });
+
+    final textCol = NeoColors.text(context);
+    final mutedCol = NeoColors.mutedText(context);
+    final borderCol = NeoColors.border(context);
+    final secondaryCol = NeoColors.surfaceSecondary(context);
+
     return NeoCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -96,34 +133,36 @@ class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsC
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: NeoColors.bgLight,
-                  border: Border.all(color: NeoColors.black, width: 2),
+                  color: NeoColors.headerBg(context),
+                  border: Border.all(color: borderCol, width: 2),
                   boxShadow: NeoColors.hardShadow(offset: 2),
                 ),
-                child: const Icon(Icons.notifications_active, color: NeoColors.black, size: 20),
+                child: Icon(Icons.notifications_active, color: textCol, size: 20),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'PENGINGAT HARIAN',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.5,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'PENGINGAT HARIAN',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
                     ),
-                  ),
-                  Text(
-                    'NOTIFIKASI CATAT PENGELUARAN',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      color: NeoColors.textMuted,
-                      letterSpacing: 0.3,
+                    Text(
+                      'NOTIFIKASI CATAT PENGELUARAN',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: mutedCol,
+                        letterSpacing: 0.3,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -133,24 +172,31 @@ class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsC
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: NeoColors.white,
-              border: Border.all(color: NeoColors.black, width: 2),
+              color: secondaryCol,
+              border: Border.all(color: borderCol, width: 2),
               boxShadow: NeoColors.hardShadow(offset: 2),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'STATUS PENGINGAT',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
+                const Expanded(
+                  child: Text(
+                    'STATUS PENGINGAT',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Switch(
                   value: _isActive,
                   activeTrackColor: NeoColors.primaryBlueLight,
                   activeThumbColor: NeoColors.primaryBlue,
                   onChanged: (val) {
                     AudioService().playClickSound();
-                    setState(() => _isActive = val);
+                    setState(() {
+                      _hasEdited = true;
+                      _isActive = val;
+                    });
                   },
                 ),
               ],
@@ -164,24 +210,37 @@ class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsC
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               decoration: BoxDecoration(
-                color: _isActive ? NeoColors.white : Colors.grey.shade200,
-                border: Border.all(color: NeoColors.black, width: 2),
+                color: _isActive ? secondaryCol : NeoColors.disabledSurface(context),
+                border: Border.all(color: borderCol, width: 2),
                 boxShadow: NeoColors.hardShadow(offset: _isActive ? 2 : 0),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'WAKTU PENGINGAT (SETIAP HARI)',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
+                  Expanded(
+                    child: Text(
+                      'WAKTU PENGINGAT (SETIAP HARI)',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: _isActive ? textCol : mutedCol,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.access_time, size: 16, color: NeoColors.black),
+                      Icon(Icons.access_time, size: 16, color: _isActive ? textCol : mutedCol),
                       const SizedBox(width: 6),
                       Text(
                         _timeStr,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          color: _isActive ? textCol : mutedCol,
+                        ),
                       ),
                     ],
                   ),

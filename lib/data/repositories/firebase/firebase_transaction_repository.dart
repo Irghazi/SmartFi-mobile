@@ -8,11 +8,11 @@ class FirebaseTransactionRepository implements TransactionRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  String _resolveUserId(String passedUserId) {
+  String? _resolveUserId(String passedUserId) {
     if (passedUserId.isNotEmpty && passedUserId != 'default_user') {
       return passedUserId;
     }
-    return _auth.currentUser?.uid ?? 'anonymous_user';
+    return _auth.currentUser?.uid;
   }
 
   @override
@@ -23,6 +23,8 @@ class FirebaseTransactionRepository implements TransactionRepository {
     String? type,
   }) async {
     final uid = _resolveUserId(userId);
+    if (uid == null) return [];
+
     Query<Map<String, dynamic>> query = _firestore
         .collection('users')
         .doc(uid)
@@ -34,7 +36,7 @@ class FirebaseTransactionRepository implements TransactionRepository {
       query = query.where('transactionDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start));
     }
     if (endDate != null) {
-      final end = DateTime(endDate.year, endDate.month, endDate.day, 23, 59, 59);
+      final end = DateTime(endDate.year, endDate.month, endDate.day, 23, 59, 59, 999, 999);
       query = query.where('transactionDate', isLessThanOrEqualTo: Timestamp.fromDate(end));
     }
     if (type != null && type != 'all') {
@@ -43,38 +45,24 @@ class FirebaseTransactionRepository implements TransactionRepository {
 
     final snapshot = await query.get();
     return snapshot.docs.map((doc) {
-      final data = doc.data();
-      DateTime txDate = DateTime.now();
-      if (data['transactionDate'] is Timestamp) {
-        txDate = (data['transactionDate'] as Timestamp).toDate();
-      } else if (data['transactionDate'] is String) {
-        txDate = DateTime.tryParse(data['transactionDate'] as String) ?? DateTime.now();
-      }
-
-      DateTime createdAt = DateTime.now();
-      if (data['createdAt'] is Timestamp) {
-        createdAt = (data['createdAt'] as Timestamp).toDate();
-      } else if (data['createdAt'] is String) {
-        createdAt = DateTime.tryParse(data['createdAt'] as String) ?? DateTime.now();
-      }
-
-      return TransactionModel(
-        id: doc.id,
-        userId: uid,
-        type: data['type'] as String? ?? 'expense',
-        nominal: (data['nominal'] as num?)?.toInt() ?? 0,
-        description: data['description'] as String? ?? '',
-        categoryId: data['categoryId'] as String?,
-        categoryName: data['categoryName'] as String? ?? 'Lainnya',
-        transactionDate: txDate,
-        createdAt: createdAt,
-      );
+      return TransactionModel.fromJson({
+        ...doc.data(),
+        'id': doc.id,
+        'userId': uid,
+      });
     }).toList();
   }
 
   @override
   Future<TransactionModel> addTransaction(TransactionModel transaction) async {
     final uid = _resolveUserId(transaction.userId);
+    if (uid == null) {
+      throw Exception('Sesi login tidak ditemukan. Silakan masuk kembali.');
+    }
+    if (transaction.nominal <= 0) {
+      throw Exception('Nominal transaksi harus lebih dari Rp 0.');
+    }
+
     final col = _firestore.collection('users').doc(uid).collection('transactions');
     final docRef = col.doc();
 
@@ -97,6 +85,13 @@ class FirebaseTransactionRepository implements TransactionRepository {
   @override
   Future<void> updateTransaction(TransactionModel transaction) async {
     final uid = _resolveUserId(transaction.userId);
+    if (uid == null) {
+      throw Exception('Sesi login tidak ditemukan. Silakan masuk kembali.');
+    }
+    if (transaction.nominal <= 0) {
+      throw Exception('Nominal transaksi harus lebih dari Rp 0.');
+    }
+
     final docRef = _firestore
         .collection('users')
         .doc(uid)
@@ -104,6 +99,8 @@ class FirebaseTransactionRepository implements TransactionRepository {
         .doc(transaction.id);
 
     final data = {
+      'id': transaction.id,
+      'userId': uid,
       'type': transaction.type,
       'nominal': transaction.nominal,
       'description': transaction.description,
@@ -113,13 +110,15 @@ class FirebaseTransactionRepository implements TransactionRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
-    await docRef.update(data);
+    await docRef.set(data, SetOptions(merge: true));
   }
 
   @override
   Future<void> deleteTransaction(String transactionId) async {
     final uid = _auth.currentUser?.uid;
-    if (uid == null) return;
+    if (uid == null) {
+      throw Exception('Sesi login tidak ditemukan. Silakan masuk kembali.');
+    }
 
     await _firestore
         .collection('users')
@@ -132,6 +131,9 @@ class FirebaseTransactionRepository implements TransactionRepository {
   @override
   Future<void> deleteTransactionsByRange(String userId, String range) async {
     final uid = _resolveUserId(userId);
+    if (uid == null) {
+      throw Exception('Sesi login tidak ditemukan. Silakan masuk kembali.');
+    }
     final col = _firestore.collection('users').doc(uid).collection('transactions');
 
     Query<Map<String, dynamic>> query = col;
@@ -148,11 +150,17 @@ class FirebaseTransactionRepository implements TransactionRepository {
     final snapshot = await query.get();
     if (snapshot.docs.isEmpty) return;
 
-    final batch = _firestore.batch();
-    for (final doc in snapshot.docs) {
-      batch.delete(doc.reference);
+    const batchLimit = 500;
+    for (int i = 0; i < snapshot.docs.length; i += batchLimit) {
+      final end = (i + batchLimit < snapshot.docs.length)
+          ? i + batchLimit
+          : snapshot.docs.length;
+      final batch = _firestore.batch();
+      for (final doc in snapshot.docs.sublist(i, end)) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
     }
-    await batch.commit();
   }
 
   Future<int> getCurrentBalance(String userId) async {

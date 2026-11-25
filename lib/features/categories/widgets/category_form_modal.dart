@@ -68,7 +68,10 @@ class _CategoryFormContentState extends State<_CategoryFormContent> {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nama kategori wajib diisi')),
+        const SnackBar(
+          content: Text('Nama kategori wajib diisi'),
+          backgroundColor: NeoColors.warningYellow,
+        ),
       );
       return;
     }
@@ -88,6 +91,15 @@ class _CategoryFormContentState extends State<_CategoryFormContent> {
 
       await widget.onSave(category);
       if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menyimpan kategori: ${e.toString().replaceFirst('Exception: ', '')}'),
+            backgroundColor: NeoColors.dangerRed,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -95,6 +107,10 @@ class _CategoryFormContentState extends State<_CategoryFormContent> {
 
   @override
   Widget build(BuildContext context) {
+    final textCol = NeoColors.text(context);
+    final surfaceCol = NeoColors.surface(context);
+    final borderCol = NeoColors.border(context);
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -108,9 +124,9 @@ class _CategoryFormContentState extends State<_CategoryFormContent> {
         const SizedBox(height: 14),
 
         // Tipe Kategori
-        const Text(
+        Text(
           'TIPE KATEGORI',
-          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5),
+          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5, color: textCol),
         ),
         const SizedBox(height: 6),
         Row(
@@ -124,15 +140,15 @@ class _CategoryFormContentState extends State<_CategoryFormContent> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
-                    color: _type == 'expense' ? NeoColors.dangerRed : NeoColors.surfaceLight,
-                    border: Border.all(color: NeoColors.black, width: 2),
+                    color: _type == 'expense' ? NeoColors.dangerRed : surfaceCol,
+                    border: Border.all(color: _type == 'expense' ? NeoColors.black : borderCol, width: 2),
                     boxShadow: _type == 'expense' ? NeoColors.hardShadow(offset: 2) : [],
                   ),
                   child: Center(
                     child: Text(
                       'PENGELUARAN',
                       style: TextStyle(
-                        color: _type == 'expense' ? NeoColors.textLight : NeoColors.textDark,
+                        color: _type == 'expense' ? NeoColors.textLight : textCol,
                         fontWeight: FontWeight.w900,
                         fontSize: 12,
                       ),
@@ -151,15 +167,15 @@ class _CategoryFormContentState extends State<_CategoryFormContent> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
-                    color: _type == 'income' ? NeoColors.successGreen : NeoColors.surfaceLight,
-                    border: Border.all(color: NeoColors.black, width: 2),
+                    color: _type == 'income' ? NeoColors.successGreen : surfaceCol,
+                    border: Border.all(color: _type == 'income' ? NeoColors.black : borderCol, width: 2),
                     boxShadow: _type == 'income' ? NeoColors.hardShadow(offset: 2) : [],
                   ),
                   child: Center(
                     child: Text(
                       'PEMASUKAN',
                       style: TextStyle(
-                        color: _type == 'income' ? NeoColors.textLight : NeoColors.textDark,
+                        color: _type == 'income' ? NeoColors.textLight : textCol,
                         fontWeight: FontWeight.w900,
                         fontSize: 12,
                       ),
@@ -173,9 +189,9 @@ class _CategoryFormContentState extends State<_CategoryFormContent> {
         const SizedBox(height: 14),
 
         // Pemilih Ikon
-        const Text(
+        Text(
           'PILIH IKON',
-          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5),
+          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5, color: textCol),
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -194,11 +210,15 @@ class _CategoryFormContentState extends State<_CategoryFormContent> {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: isSelected ? NeoColors.yellowAccent : NeoColors.surfaceLight,
-                  border: Border.all(color: NeoColors.black, width: 2),
+                  color: isSelected ? NeoColors.yellowAccent : surfaceCol,
+                  border: Border.all(color: isSelected ? NeoColors.black : borderCol, width: 2),
                   boxShadow: isSelected ? NeoColors.hardShadow(offset: 2) : [],
                 ),
-                child: Icon(icon, size: 20, color: NeoColors.black),
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: isSelected ? NeoColors.black : textCol,
+                ),
               ),
             );
           }).toList(),
@@ -206,9 +226,9 @@ class _CategoryFormContentState extends State<_CategoryFormContent> {
         const SizedBox(height: 14),
 
         // Pemilih Warna
-        const Text(
+        Text(
           'PILIH WARNA',
-          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5),
+          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5, color: textCol),
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -228,7 +248,7 @@ class _CategoryFormContentState extends State<_CategoryFormContent> {
                 height: 38,
                 decoration: BoxDecoration(
                   color: color,
-                  border: Border.all(color: NeoColors.black, width: 2),
+                  border: Border.all(color: isSelected ? textCol : NeoColors.black, width: isSelected ? 3 : 2),
                   boxShadow: isSelected ? NeoColors.hardShadow(offset: 3) : [],
                 ),
                 child: isSelected

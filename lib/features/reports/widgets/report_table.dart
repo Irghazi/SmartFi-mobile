@@ -22,6 +22,12 @@ class ReportTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final borderCol = NeoColors.border(context);
+    final textCol = NeoColors.text(context);
+    final mutedCol = NeoColors.mutedText(context);
+    final surfaceCol = NeoColors.surface(context);
+    final secondaryCol = NeoColors.surfaceSecondary(context);
+
     return NeoCard(
       padding: EdgeInsets.zero,
       child: Column(
@@ -30,35 +36,41 @@ class ReportTable extends StatelessWidget {
           // Header Kartu
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(
-              color: NeoColors.bgLight,
+            decoration: BoxDecoration(
+              color: NeoColors.headerBg(context),
               border: Border(
-                bottom: BorderSide(color: NeoColors.black, width: 3),
+                bottom: BorderSide(color: borderCol, width: 3),
               ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'DETAIL TRANSAKSI',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.3,
+                const Expanded(
+                  child: Text(
+                    'DETAIL TRANSAKSI',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.3,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: NeoColors.white,
-                    border: Border.all(color: NeoColors.black, width: 2),
+                    color: surfaceCol,
+                    border: Border.all(color: borderCol, width: 2),
                     boxShadow: NeoColors.hardShadow(offset: 2),
                   ),
                   child: Text(
                     '${transactions.length} TRANSAKSI',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w900,
+                      color: textCol,
                     ),
                   ),
                 ),
@@ -70,16 +82,16 @@ class ReportTable extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(28),
               child: Column(
-                children: const [
-                  Icon(Icons.inbox, size: 40, color: NeoColors.textDisabled),
-                  SizedBox(height: 8),
+                children: [
+                  Icon(Icons.inbox, size: 40, color: mutedCol),
+                  const SizedBox(height: 8),
                   Text(
                     'TIDAK ADA TRANSAKSI UNTUK FILTER TERSEBUT',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w900,
-                      color: NeoColors.textMuted,
+                      color: mutedCol,
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -94,17 +106,20 @@ class ReportTable extends StatelessWidget {
                   minWidth: MediaQuery.of(context).size.width - 40,
                 ),
                 child: DataTable(
-                  headingRowColor: WidgetStateProperty.all(NeoColors.white),
+                  headingRowColor: WidgetStateProperty.all(surfaceCol),
                   border: TableBorder(
-                    horizontalInside: const BorderSide(color: NeoColors.black, width: 1.5),
-                    bottom: const BorderSide(color: NeoColors.black, width: 2),
+                    horizontalInside: BorderSide(color: borderCol, width: 1.5),
+                    bottom: BorderSide(color: borderCol, width: 2),
                   ),
                   columnSpacing: 14,
                   horizontalMargin: 12,
-                  headingTextStyle: const TextStyle(
+                  headingTextStyle: TextStyle(
                     fontWeight: FontWeight.w900,
                     fontSize: 11,
-                    color: NeoColors.black,
+                    color: textCol,
+                  ),
+                  dataTextStyle: TextStyle(
+                    color: textCol,
                   ),
                   columns: const [
                     DataColumn(label: Text('NO')),
@@ -128,12 +143,12 @@ class ReportTable extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: NeoColors.white,
-                                border: Border.all(color: NeoColors.black, width: 1.5),
+                                color: secondaryCol,
+                                border: Border.all(color: borderCol, width: 1.5),
                               ),
                               child: Text(
                                 tx.categoryName.toUpperCase(),
-                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: textCol),
                               ),
                             ),
                           ),
@@ -153,7 +168,7 @@ class ReportTable extends StatelessWidget {
                               style: TextStyle(
                                 fontWeight: FontWeight.w900,
                                 fontSize: 11,
-                                color: isInc ? NeoColors.successGreen : NeoColors.black,
+                                color: isInc ? NeoColors.incomeText(context) : textCol,
                               ),
                             ),
                           ),
@@ -163,7 +178,7 @@ class ReportTable extends StatelessWidget {
                               style: TextStyle(
                                 fontWeight: FontWeight.w900,
                                 fontSize: 11,
-                                color: !isInc ? NeoColors.dangerRed : NeoColors.black,
+                                color: !isInc ? NeoColors.expenseText(context) : textCol,
                               ),
                             ),
                           ),
@@ -172,34 +187,34 @@ class ReportTable extends StatelessWidget {
                     }),
                     // Baris TOTAL
                     DataRow(
-                      color: WidgetStateProperty.all(Colors.grey.shade200),
+                      color: WidgetStateProperty.all(secondaryCol),
                       cells: [
                         const DataCell(Text('')),
                         const DataCell(Text('')),
                         const DataCell(Text('')),
-                        const DataCell(
+                        DataCell(
                           Text(
                             'TOTAL',
-                            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: textCol),
                           ),
                         ),
                         DataCell(
                           Text(
                             CurrencyFormatter.formatRupiah(totalIncome),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w900,
                               fontSize: 12,
-                              color: NeoColors.successGreen,
+                              color: NeoColors.incomeText(context),
                             ),
                           ),
                         ),
                         DataCell(
                           Text(
                             CurrencyFormatter.formatRupiah(totalExpense),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w900,
                               fontSize: 12,
-                              color: NeoColors.dangerRed,
+                              color: NeoColors.expenseText(context),
                             ),
                           ),
                         ),
@@ -215,15 +230,17 @@ class ReportTable extends StatelessWidget {
                         const DataCell(
                           Text(
                             'SALDO BERSIH',
-                            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 13,
+                              color: NeoColors.textDark,
+                            ),
                           ),
                         ),
                         const DataCell(Text('')),
                         DataCell(
                           Text(
-                            netBalance < 0
-                                ? '-${CurrencyFormatter.formatRupiah(netBalance.abs())}'
-                                : CurrencyFormatter.formatRupiah(netBalance),
+                            CurrencyFormatter.formatRupiah(netBalance),
                             style: const TextStyle(
                               fontWeight: FontWeight.w900,
                               fontSize: 13,

@@ -7,7 +7,8 @@ class AudioService {
   factory AudioService() => _instance;
   AudioService._internal();
 
-  final AudioPlayer _player = AudioPlayer();
+  final AudioPlayer _clickPlayer = AudioPlayer();
+  final AudioPlayer _chatPlayer = AudioPlayer();
 
   bool _isClickMuted = false;
   bool _isAiMuted = false;
@@ -20,6 +21,8 @@ class AudioService {
       final prefs = await SharedPreferences.getInstance();
       _isClickMuted = prefs.getBool('smartfi_mute_click') ?? false;
       _isAiMuted = prefs.getBool('smartfi_mute_ai') ?? false;
+      await _clickPlayer.setPlayerMode(PlayerMode.lowLatency);
+      await _chatPlayer.setPlayerMode(PlayerMode.lowLatency);
     } catch (e) {
       debugPrint('Error init AudioService: $e');
     }
@@ -40,8 +43,8 @@ class AudioService {
   Future<void> playClickSound() async {
     if (_isClickMuted) return;
     try {
-      await _player.stop();
-      await _player.play(AssetSource('sounds/click.mp3'));
+      await _clickPlayer.stop();
+      await _clickPlayer.play(AssetSource('sounds/click.mp3'));
     } catch (e) {
       debugPrint('Gagal memutar audio klik: $e');
     }
@@ -50,8 +53,8 @@ class AudioService {
   Future<void> playChatSound() async {
     if (_isAiMuted) return;
     try {
-      await _player.stop();
-      await _player.play(AssetSource('sounds/chat.mp3'));
+      await _chatPlayer.stop();
+      await _chatPlayer.play(AssetSource('sounds/chat.mp3'));
     } catch (e) {
       debugPrint('Gagal memutar audio chat: $e');
     }

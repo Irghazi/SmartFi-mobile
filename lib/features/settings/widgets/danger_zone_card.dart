@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/services/audio_service.dart';
 import '../../../core/theme/neo_colors.dart';
 import '../../../shared/widgets/neo_button.dart';
 import '../../../shared/widgets/neo_card.dart';
+import '../../../shared/widgets/neo_modal.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../transactions/providers/transaction_provider.dart';
 
 /// Kartu Zona Bahaya: Hapus riwayat transaksi berdasarkan rentang
@@ -26,116 +29,41 @@ class _DangerZoneCardState extends ConsumerState<DangerZoneCard> {
         ? 'bulan ini'
         : (_deleteRange == 'this_year' ? 'tahun ini' : 'semua waktu');
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await NeoModal.show<bool>(
       context: context,
-      barrierColor: const Color(0x99000000),
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Container(
-          decoration: BoxDecoration(
-            color: NeoColors.surfaceLight,
-            border: Border.all(color: NeoColors.black, width: 4),
-            boxShadow: NeoColors.hardShadow(offset: 8),
+      title: 'Konfirmasi Hapus Transaksi',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Apakah Anda yakin ingin menghapus data transaksi untuk rentang $rangeText? Data akan hilang permanen.',
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              height: 1.4,
+            ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          const SizedBox(height: 20),
+          Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: const BoxDecoration(
-                  color: NeoColors.dangerRedLight,
-                  border: Border(
-                    bottom: BorderSide(color: NeoColors.black, width: 4),
-                  ),
-                ),
-                child: const Text(
-                  'KONFIRMASI HAPUS TRANSAKSI',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 15,
-                    color: NeoColors.black,
-                  ),
+              Expanded(
+                child: NeoButton(
+                  text: 'Batal',
+                  variant: NeoButtonVariant.outline,
+                  onPressed: () => Navigator.of(context).pop(false),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Apakah Anda yakin ingin menghapus data transaksi untuk rentang $rangeText? Data akan hilang permanen.',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        height: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: InkWell(
-                            onTap: () => Navigator.of(ctx).pop(false),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: NeoColors.white,
-                                border: Border.all(
-                                  color: NeoColors.black,
-                                  width: 2,
-                                ),
-                                boxShadow: NeoColors.hardShadow(offset: 2),
-                              ),
-                              alignment: Alignment.center,
-                              child: const Text(
-                                'BATAL',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: InkWell(
-                            onTap: () => Navigator.of(ctx).pop(true),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: NeoColors.dangerRed,
-                                border: Border.all(
-                                  color: NeoColors.black,
-                                  width: 2,
-                                ),
-                                boxShadow: NeoColors.hardShadow(offset: 2),
-                              ),
-                              alignment: Alignment.center,
-                              child: const Text(
-                                'YA, HAPUS',
-                                style: TextStyle(
-                                  color: NeoColors.white,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: NeoButton(
+                  text: 'Ya, Hapus',
+                  variant: NeoButtonVariant.danger,
+                  onPressed: () => Navigator.of(context).pop(true),
                 ),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
 
@@ -145,6 +73,13 @@ class _DangerZoneCardState extends ConsumerState<DangerZoneCard> {
         await ref
             .read(transactionsProvider.notifier)
             .deleteByRange(_deleteRange);
+        if (_deleteRange == 'all') {
+          final userId = ref.read(authStateProvider).asData?.value?.id;
+          if (userId != null) {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool('smartfi_onboarding_completed_$userId', true);
+          }
+        }
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -157,7 +92,7 @@ class _DangerZoneCardState extends ConsumerState<DangerZoneCard> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Gagal menghapus transaksi: $e'),
+              content: Text('Gagal menghapus transaksi: ${e.toString().replaceFirst('Exception: ', '')}'),
               backgroundColor: NeoColors.dangerRed,
             ),
           );
@@ -170,6 +105,11 @@ class _DangerZoneCardState extends ConsumerState<DangerZoneCard> {
 
   @override
   Widget build(BuildContext context) {
+    final textCol = NeoColors.text(context);
+    final mutedCol = NeoColors.mutedText(context);
+    final borderCol = NeoColors.border(context);
+    final secondaryCol = NeoColors.surfaceSecondary(context);
+
     return NeoCard(
       borderColor: NeoColors.dangerRed,
       child: Column(
@@ -192,28 +132,30 @@ class _DangerZoneCardState extends ConsumerState<DangerZoneCard> {
                 ),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'ZONA BAHAYA',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.5,
-                      color: NeoColors.dangerRed,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'ZONA BAHAYA',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                        color: NeoColors.expenseText(context),
+                      ),
                     ),
-                  ),
-                  Text(
-                    'HAPUS DATA TRANSAKSI PERMANEN',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      color: NeoColors.textMuted,
-                      letterSpacing: 0.3,
+                    Text(
+                      'HAPUS DATA TRANSAKSI PERMANEN',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: mutedCol,
+                        letterSpacing: 0.3,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -235,22 +177,23 @@ class _DangerZoneCardState extends ConsumerState<DangerZoneCard> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: NeoColors.white,
-                  border: Border.all(color: NeoColors.black, width: 2),
+                  color: secondaryCol,
+                  border: Border.all(color: borderCol, width: 2),
                   boxShadow: NeoColors.hardShadow(offset: 2),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: _deleteRange,
                     isExpanded: true,
-                    icon: const Icon(
+                    dropdownColor: NeoColors.surface(context),
+                    icon: Icon(
                       Icons.keyboard_arrow_down,
-                      color: NeoColors.black,
+                      color: textCol,
                     ),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: NeoColors.black,
+                      color: textCol,
                     ),
                     items: const [
                       DropdownMenuItem(

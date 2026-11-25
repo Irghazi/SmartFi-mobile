@@ -3,7 +3,7 @@ class AiConfig {
 
   static const String baseUrl = String.fromEnvironment(
     'AI_BASE_URL',
-    defaultValue: 'https://api.bangunweb.com/v1',
+    defaultValue: 'https://router.bangunweb.com/v1',
   );
 
   static const String model = String.fromEnvironment(

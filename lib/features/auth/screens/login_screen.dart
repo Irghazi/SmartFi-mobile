@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/neo_colors.dart';
+import '../../../core/utils/validators.dart';
 import '../../../shared/widgets/blueprint_background.dart';
 import '../../../shared/widgets/neo_button.dart';
 import '../../../shared/widgets/neo_card.dart';
@@ -18,7 +19,10 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  String? _emailError;
+  String? _passwordError;
   String? _errorMessage;
+  bool _obscurePassword = true;
   bool _isLoading = false;
 
   @override
@@ -33,25 +37,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _passwordController.text.trim().isNotEmpty;
 
   Future<void> _handleLogin() async {
-    if (!_isFormFilled) return;
+    final emailErr = Validators.validateEmail(_emailController.text);
+    final passErr = Validators.validatePassword(_passwordController.text);
+
+    if (emailErr != null || passErr != null) {
+      setState(() {
+        _emailError = emailErr;
+        _passwordError = passErr;
+        _errorMessage = null;
+      });
+      return;
+    }
+
     setState(() {
+      _emailError = null;
+      _passwordError = null;
       _errorMessage = null;
       _isLoading = true;
     });
 
     try {
-      final repo = ref.read(authRepositoryProvider);
-      await repo.signInWithEmailPassword(
+      await ref.read(authControllerProvider.notifier).login(
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
-      if (mounted) {
-        context.go('/dashboard');
-      }
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceFirst('Exception: ', '');
+        });
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -61,20 +76,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _handleGoogleLogin() async {
     setState(() {
+      _emailError = null;
+      _passwordError = null;
       _errorMessage = null;
       _isLoading = true;
     });
 
     try {
-      final repo = ref.read(authRepositoryProvider);
-      await repo.signInWithGoogle();
-      if (mounted) {
-        context.go('/dashboard');
-      }
+      await ref.read(authControllerProvider.notifier).loginWithGoogle();
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceFirst('Exception: ', '');
+        });
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -84,6 +99,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final textCol = NeoColors.text(context);
+    final mutedCol = NeoColors.mutedText(context);
+    final borderCol = NeoColors.border(context);
+
     return Scaffold(
       body: BlueprintBackground(
         child: SafeArea(
@@ -115,22 +134,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      const Text(
+                      Text(
                         'SELAMAT DATANG KEMBALI',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: NeoColors.textDark,
+                          color: textCol,
                           fontWeight: FontWeight.w900,
                           fontSize: 20,
                           letterSpacing: 0.5,
                         ),
                       ),
                       const SizedBox(height: 6),
-                      const Text(
+                      Text(
                         'Kelola finansial Anda dengan cerdas',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: NeoColors.textMuted,
+                          color: mutedCol,
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
                         ),
@@ -143,7 +162,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         hintText: 'Masukkan email Anda',
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
-                        onChanged: (_) => setState(() {}),
+                        errorText: _emailError,
+                        onChanged: (_) => setState(() => _emailError = null),
                       ),
                       const SizedBox(height: 16),
 
@@ -152,8 +172,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         label: 'Kata Sandi',
                         hintText: 'Masukkan kata sandi Anda',
                         controller: _passwordController,
-                        obscureText: true,
-                        onChanged: (_) => setState(() {}),
+                        obscureText: _obscurePassword,
+                        errorText: _passwordError,
+                        suffixIcon: IconButton(
+                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                          icon: Icon(
+                            _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                            size: 20,
+                            color: mutedCol,
+                          ),
+                        ),
+                        onChanged: (_) => setState(() => _passwordError = null),
                       ),
                       const SizedBox(height: 16),
 
@@ -192,21 +221,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       Row(
                         children: [
                           Expanded(
-                            child: Container(height: 2, color: NeoColors.black),
+                            child: Container(height: 2, color: borderCol),
                           ),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 12.0),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12.0),
                             child: Text(
                               'ATAU',
                               style: TextStyle(
                                 fontWeight: FontWeight.w900,
                                 fontSize: 12,
-                                color: NeoColors.textDark,
+                                color: textCol,
                               ),
                             ),
                           ),
                           Expanded(
-                            child: Container(height: 2, color: NeoColors.black),
+                            child: Container(height: 2, color: borderCol),
                           ),
                         ],
                       ),
@@ -217,30 +246,47 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         text: 'Masuk dengan Google',
                         variant: NeoButtonVariant.outline,
                         onPressed: _isLoading ? null : _handleGoogleLogin,
-                        icon: const Icon(Icons.g_mobiledata, size: 28, color: NeoColors.black),
+                        icon: Container(
+                          width: 22,
+                          height: 22,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: NeoColors.surfaceLight,
+                            border: Border.all(color: NeoColors.black, width: 1.5),
+                          ),
+                          child: const Text(
+                            'G',
+                            style: TextStyle(
+                              color: Color(0xFFDB4437),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 24),
 
                       // Link Register
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          const Text(
+                          Text(
                             'Belum punya akun? ',
                             style: TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: 13,
-                              color: NeoColors.textDark,
+                              color: textCol,
                             ),
                           ),
                           GestureDetector(
                             onTap: () => context.go('/register'),
-                            child: const Text(
+                            child: Text(
                               'Ayo daftar',
                               style: TextStyle(
                                 fontWeight: FontWeight.w900,
                                 fontSize: 13,
-                                color: NeoColors.primaryBlue,
+                                color: NeoColors.blueAccentText(context),
                                 decoration: TextDecoration.underline,
                                 decorationThickness: 2,
                               ),

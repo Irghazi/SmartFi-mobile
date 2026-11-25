@@ -6,6 +6,7 @@ import '../../../data/models/transaction_model.dart';
 import '../../../shared/widgets/neo_button.dart';
 import '../../../shared/widgets/neo_card.dart';
 import '../../../shared/widgets/neo_input.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../transactions/providers/transaction_provider.dart';
 
 /// Kartu koreksi saldo aktual manual
@@ -32,6 +33,7 @@ class _BalanceCorrectionCardState extends ConsumerState<BalanceCorrectionCard> {
     if (clean.isEmpty) {
       _rawInput = 0;
       _balanceController.value = const TextEditingValue(text: '');
+      setState(() {});
       return;
     }
     final parsed = int.tryParse(clean) ?? 0;
@@ -41,6 +43,7 @@ class _BalanceCorrectionCardState extends ConsumerState<BalanceCorrectionCard> {
       text: formatted,
       selection: TextSelection.collapsed(offset: formatted.length),
     );
+    setState(() {});
   }
 
   Future<void> _handleCorrectBalance(int currentBalance) async {
@@ -59,9 +62,15 @@ class _BalanceCorrectionCardState extends ConsumerState<BalanceCorrectionCard> {
     try {
       final now = DateTime.now();
       final isInc = diff > 0;
+      final user = ref.read(authStateProvider).asData?.value;
+      final userId = user?.id;
+      if (userId == null) {
+        throw Exception('Sesi login tidak ditemukan.');
+      }
+
       final tx = TransactionModel(
         id: 'tx_adj_${now.millisecondsSinceEpoch}',
-        userId: 'default_user',
+        userId: userId,
         type: isInc ? 'income' : 'expense',
         nominal: diff.abs(),
         categoryName: 'Penyesuaian Saldo',
@@ -86,7 +95,7 @@ class _BalanceCorrectionCardState extends ConsumerState<BalanceCorrectionCard> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gagal mengoreksi saldo: $e'),
+            content: Text('Gagal mengoreksi saldo: ${e.toString().replaceFirst('Exception: ', '')}'),
             backgroundColor: NeoColors.dangerRed,
           ),
         );
@@ -105,6 +114,11 @@ class _BalanceCorrectionCardState extends ConsumerState<BalanceCorrectionCard> {
     final exp = txs.where((t) => t.isExpense).fold<int>(0, (sum, t) => sum + t.nominal);
     final currentBalance = inc - exp;
 
+    final textCol = NeoColors.text(context);
+    final mutedCol = NeoColors.mutedText(context);
+    final borderCol = NeoColors.border(context);
+    final secondaryCol = NeoColors.surfaceSecondary(context);
+
     return NeoCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -115,34 +129,36 @@ class _BalanceCorrectionCardState extends ConsumerState<BalanceCorrectionCard> {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: NeoColors.bgLight,
-                  border: Border.all(color: NeoColors.black, width: 2),
+                  color: NeoColors.headerBg(context),
+                  border: Border.all(color: borderCol, width: 2),
                   boxShadow: NeoColors.hardShadow(offset: 2),
                 ),
-                child: const Icon(Icons.account_balance_wallet, color: NeoColors.black, size: 20),
+                child: Icon(Icons.account_balance_wallet, color: textCol, size: 20),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'KOREKSI SALDO AKTUAL',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.5,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'KOREKSI SALDO AKTUAL',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
                     ),
-                  ),
-                  Text(
-                    'SESUAIKAN DENGAN SALDO REKENING RIIL',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      color: NeoColors.textMuted,
-                      letterSpacing: 0.3,
+                    Text(
+                      'SESUAIKAN DENGAN SALDO REKENING RIIL',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: mutedCol,
+                        letterSpacing: 0.3,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -152,23 +168,31 @@ class _BalanceCorrectionCardState extends ConsumerState<BalanceCorrectionCard> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: NeoColors.bgLight,
-              border: Border.all(color: NeoColors.black, width: 2),
+              color: secondaryCol,
+              border: Border.all(color: borderCol, width: 2),
               boxShadow: NeoColors.hardShadow(offset: 2),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'SALDO TERSIMPAN SAAT INI',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
+                const Expanded(
+                  child: Text(
+                    'SALDO TERSIMPAN SAAT INI',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                Text(
-                  CurrencyFormatter.formatRupiah(currentBalance),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    color: NeoColors.primaryBlue,
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    CurrencyFormatter.formatRupiah(currentBalance),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      color: NeoColors.blueAccentText(context),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],

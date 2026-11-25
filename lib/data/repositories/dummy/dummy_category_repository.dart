@@ -40,10 +40,11 @@ class DummyCategoryRepository implements CategoryRepository {
   }
 
   @override
-  Future<void> addCategory(CategoryModel category) async {
+  Future<CategoryModel> addCategory(CategoryModel category) async {
     final current = await getCategories(category.userId);
     current.add(category);
     await _saveCategories(category.userId, current);
+    return category;
   }
 
   @override

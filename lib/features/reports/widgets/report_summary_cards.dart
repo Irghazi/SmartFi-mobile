@@ -16,142 +16,85 @@ class ReportSummaryCards extends StatelessWidget {
     required this.netBalance,
   });
 
+  Widget _buildSummaryTile({
+    required Color backgroundColor,
+    required String title,
+    required int amount,
+    required IconData icon,
+  }) {
+    return NeoCard(
+      backgroundColor: backgroundColor,
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
+                    color: NeoColors.textDark,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  CurrencyFormatter.formatRupiah(amount),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: NeoColors.textDark,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: NeoColors.white,
+              border: Border.all(color: NeoColors.black, width: 2),
+              boxShadow: NeoColors.hardShadow(offset: 2),
+            ),
+            child: Icon(icon, color: NeoColors.black, size: 20),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Total Pemasukan
-        NeoCard(
+        _buildSummaryTile(
           backgroundColor: NeoColors.successGreenLight,
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'TOTAL PEMASUKAN',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.5,
-                      color: NeoColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    CurrencyFormatter.formatRupiah(totalIncome),
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: NeoColors.textDark,
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: NeoColors.white,
-                  border: Border.all(color: NeoColors.black, width: 2),
-                  boxShadow: NeoColors.hardShadow(offset: 2),
-                ),
-                child: const Icon(Icons.arrow_downward, color: NeoColors.black, size: 20),
-              ),
-            ],
-          ),
+          title: 'TOTAL PEMASUKAN',
+          amount: totalIncome,
+          icon: Icons.arrow_downward,
         ),
         const SizedBox(height: 10),
-
-        // Total Pengeluaran
-        NeoCard(
+        _buildSummaryTile(
           backgroundColor: NeoColors.dangerRedLight,
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'TOTAL PENGELUARAN',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.5,
-                      color: NeoColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    CurrencyFormatter.formatRupiah(totalExpense),
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: NeoColors.textDark,
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: NeoColors.white,
-                  border: Border.all(color: NeoColors.black, width: 2),
-                  boxShadow: NeoColors.hardShadow(offset: 2),
-                ),
-                child: const Icon(Icons.arrow_upward, color: NeoColors.black, size: 20),
-              ),
-            ],
-          ),
+          title: 'TOTAL PENGELUARAN',
+          amount: totalExpense,
+          icon: Icons.arrow_upward,
         ),
         const SizedBox(height: 10),
-
-        // Saldo Akhir
-        NeoCard(
+        _buildSummaryTile(
           backgroundColor: NeoColors.primaryBlueLight,
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'SALDO AKHIR',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.5,
-                      color: NeoColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    CurrencyFormatter.formatRupiah(netBalance),
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: NeoColors.textDark,
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: NeoColors.white,
-                  border: Border.all(color: NeoColors.black, width: 2),
-                  boxShadow: NeoColors.hardShadow(offset: 2),
-                ),
-                child: const Icon(Icons.account_balance_wallet, color: NeoColors.black, size: 20),
-              ),
-            ],
-          ),
+          title: 'SALDO AKHIR',
+          amount: netBalance,
+          icon: Icons.account_balance_wallet,
         ),
       ],
     );

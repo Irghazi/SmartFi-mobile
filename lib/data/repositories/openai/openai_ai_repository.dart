@@ -40,19 +40,26 @@ class OpenAiAiRepository implements AiRepository {
     // Batasi histori 8 pesan terakhir agar token efisien
     final recentHistory = history.length > 8 ? history.sublist(history.length - 8) : history;
 
+    // Hindari duplikasi jika pesan pengguna terakhir sudah ada di history
+    final historyList = List<ChatMessage>.from(recentHistory);
+    final bool alreadyEndsWithCurrent = historyList.isNotEmpty &&
+        historyList.last.isUser &&
+        historyList.last.content.trim() == message.trim();
+
     final messages = <Map<String, String>>[
       {
         'role': 'system',
         'content': AiPrompts.getMentorSystemPrompt(financialContextJson),
       },
-      ...recentHistory.map((m) => {
+      ...historyList.map((m) => {
         'role': m.isUser ? 'user' : 'assistant',
         'content': m.content,
       }),
-      {
-        'role': 'user',
-        'content': message,
-      },
+      if (!alreadyEndsWithCurrent)
+        {
+          'role': 'user',
+          'content': message,
+        },
     ];
 
     try {
@@ -80,7 +87,7 @@ class OpenAiAiRepository implements AiRepository {
       } else if (response.statusCode == 429) {
         throw const HttpException('Maaf, antrean server AI sedang penuh atau kuota habis (Error 429). Mohon tunggu sekitar satu menit lalu coba lagi.');
       } else {
-        throw HttpException('Server AI merespons dengan status error: ${response.statusCode}');
+        throw HttpException(_extractErrorDetail(response));
       }
     } on TimeoutException {
       throw const SocketException('Permintaan ke AI melebihi batas waktu (Timeout). Mohon periksa koneksi internet Anda.');
@@ -149,21 +156,50 @@ class OpenAiAiRepository implements AiRepository {
       } else if (response.statusCode == 429) {
         throw const HttpException('Antrean server AI penuh (429).');
       }
-      throw HttpException('Status server AI: ${response.statusCode}');
+      throw HttpException(_extractErrorDetail(response));
     } on TimeoutException {
       throw const SocketException('Waktu parsing AI habis.');
+    } on FormatException catch (e) {
+      throw HttpException('Format data AI tidak sesuai: ${e.message}');
+    } on SocketException catch (e) {
+      if (e.message.contains('API Key')) rethrow;
+      throw const SocketException('Gagal terhubung ke server AI.');
+    } on http.ClientException {
+      throw const SocketException('Jaringan terputus saat menghubungi AI.');
     }
   }
 
+  String _extractErrorDetail(http.Response response) {
+    try {
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (decoded is Map<String, dynamic>) {
+        final err = decoded['error'];
+        if (err is Map<String, dynamic> && err['message'] != null) {
+          return 'Server AI error (${response.statusCode}): ${err['message']}';
+        }
+        if (decoded['message'] != null) {
+          return 'Server AI error (${response.statusCode}): ${decoded['message']}';
+        }
+      }
+    } catch (_) {}
+    return 'Server AI merespons dengan status error: ${response.statusCode}';
+  }
+
   Map<String, dynamic> _cleanAndParseJson(String content) {
-    String clean = content.replaceAll(RegExp(r'```json\s*'), '').replaceAll(RegExp(r'```\s*'), '').trim();
-    // Cari kurung kurawal pertama dan terakhir
-    final start = clean.indexOf('{');
-    final end = clean.lastIndexOf('}');
-    if (start != -1 && end != -1 && end >= start) {
-      clean = clean.substring(start, end + 1);
+    try {
+      String clean = content
+          .replaceAll(RegExp(r'```json\s*'), '')
+          .replaceAll(RegExp(r'```\s*'), '')
+          .trim();
+      final start = clean.indexOf('{');
+      final end = clean.lastIndexOf('}');
+      if (start != -1 && end != -1 && end >= start) {
+        clean = clean.substring(start, end + 1);
+      }
+      return jsonDecode(clean) as Map<String, dynamic>;
+    } catch (e) {
+      throw FormatException('Gagal memproses JSON: $e');
     }
-    return jsonDecode(clean) as Map<String, dynamic>;
   }
 
   String _sanitizeOutput(String text) {

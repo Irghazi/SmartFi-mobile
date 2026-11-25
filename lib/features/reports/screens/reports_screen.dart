@@ -33,10 +33,30 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   bool _isExporting = false;
 
   void _applyFilter() {
+    if (_startDate != null && _endDate != null && _startDate!.isAfter(_endDate!)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tanggal mulai tidak boleh melebihi tanggal akhir.'),
+          backgroundColor: NeoColors.warningYellow,
+        ),
+      );
+      return;
+    }
     setState(() {
       _appliedStartDate = _startDate;
       _appliedEndDate = _endDate;
       _appliedReportType = _reportType;
+    });
+  }
+
+  void _resetFilter() {
+    setState(() {
+      _startDate = null;
+      _endDate = null;
+      _reportType = 'all';
+      _appliedStartDate = null;
+      _appliedEndDate = null;
+      _appliedReportType = 'all';
     });
   }
 
@@ -61,6 +81,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           23,
           59,
           59,
+          999,
+          999,
         );
         if (t.transactionDate.isAfter(end)) return false;
       }
@@ -129,36 +151,61 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     final transactionsAsync = ref.watch(transactionsProvider);
+    final textCol = NeoColors.text(context);
+    final mutedCol = NeoColors.mutedText(context);
+    final borderCol = NeoColors.border(context);
 
     return BlueprintBackground(
-      child: transactionsAsync.when(
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: NeoColors.black),
-        ),
-        error: (err, _) => Center(
-          child: Text(
-            'Gagal memuat data: $err',
-            style: const TextStyle(fontWeight: FontWeight.bold),
+      child: RefreshIndicator(
+        color: NeoColors.primaryBlue,
+        backgroundColor: NeoColors.surface(context),
+        onRefresh: () async {
+          await ref.read(transactionsProvider.notifier).loadTransactions(showLoading: false);
+        },
+        child: transactionsAsync.when(
+          loading: () => ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              SizedBox(
+                height: MediaQuery.of(context).size.height * 0.65,
+                child: Center(
+                  child: CircularProgressIndicator(color: textCol),
+                ),
+              ),
+            ],
           ),
-        ),
-        data: (allTransactions) {
-          final filteredTxs = _getFilteredTransactions(allTransactions);
+          error: (err, _) => ListView(
+            padding: const EdgeInsets.all(24),
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              SizedBox(height: MediaQuery.of(context).size.height * 0.2),
+              Icon(Icons.cloud_off, size: 48, color: mutedCol),
+              const SizedBox(height: 12),
+              Text(
+                'Gagal memuat data laporan.\n($err)',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontWeight: FontWeight.bold, color: textCol),
+              ),
+              const SizedBox(height: 16),
+              NeoButton(
+                text: 'Coba Lagi',
+                isFullWidth: false,
+                onPressed: () => ref.read(transactionsProvider.notifier).loadTransactions(),
+              ),
+            ],
+          ),
+          data: (allTransactions) {
+            final filteredTxs = _getFilteredTransactions(allTransactions);
 
-          final totalIncome = filteredTxs
-              .where((t) => t.isIncome)
-              .fold<int>(0, (sum, t) => sum + t.nominal);
-          final totalExpense = filteredTxs
-              .where((t) => t.isExpense)
-              .fold<int>(0, (sum, t) => sum + t.nominal);
-          final netBalance = totalIncome - totalExpense;
+            final totalIncome = filteredTxs
+                .where((t) => t.isIncome)
+                .fold<int>(0, (sum, t) => sum + t.nominal);
+            final totalExpense = filteredTxs
+                .where((t) => t.isExpense)
+                .fold<int>(0, (sum, t) => sum + t.nominal);
+            final netBalance = totalIncome - totalExpense;
 
-          return RefreshIndicator(
-            color: NeoColors.primaryBlue,
-            backgroundColor: NeoColors.white,
-            onRefresh: () async {
-              await ref.read(transactionsProvider.notifier).loadTransactions();
-            },
-            child: ListView(
+            return ListView(
               padding: const EdgeInsets.all(16),
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
@@ -169,39 +216,42 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: NeoColors.white,
-                        border: Border.all(color: NeoColors.black, width: 2),
+                        color: NeoColors.surface(context),
+                        border: Border.all(color: borderCol, width: 2),
                         boxShadow: NeoColors.hardShadow(offset: 3),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.description,
                         size: 24,
-                        color: NeoColors.black,
+                        color: textCol,
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'LAPORAN KEUANGAN',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.5,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'LAPORAN KEUANGAN',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.5,
+                              color: textCol,
+                            ),
                           ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'FILTER DAN EKSPOR DATA KEUANGANMU',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: NeoColors.textMuted,
-                            letterSpacing: 0.3,
+                          const SizedBox(height: 2),
+                          Text(
+                            'FILTER DAN EKSPOR DATA KEUANGANMU',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: mutedCol,
+                              letterSpacing: 0.3,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -216,6 +266,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   onEndDateChanged: (d) => setState(() => _endDate = d),
                   onReportTypeChanged: (t) => setState(() => _reportType = t),
                   onSearch: _applyFilter,
+                  onReset: _resetFilter,
                 ),
                 const SizedBox(height: 16),
 
@@ -242,13 +293,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     Expanded(
                       child: NeoButton(
                         text: _isExporting ? 'MEMPROSES...' : 'EKSPOR PDF',
-                        icon: const Icon(
+                        variant: NeoButtonVariant.outline,
+                        icon: Icon(
                           Icons.picture_as_pdf,
                           size: 18,
-                          color: NeoColors.black,
+                          color: NeoColors.text(context),
                         ),
-                        backgroundColor: NeoColors.white,
-                        textColor: NeoColors.black,
                         onPressed: filteredTxs.isEmpty || _isExporting
                             ? null
                             : () => _handleExportPdf(
@@ -284,9 +334,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 ),
                 const SizedBox(height: 24),
               ],
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

@@ -20,6 +20,12 @@ class SuggestionPills extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surfaceCol = NeoColors.surface(context);
+    final borderCol = NeoColors.border(context);
+    final textCol = NeoColors.text(context);
+    final disabledBg = NeoColors.disabledSurface(context);
+    final disabledText = NeoColors.mutedText(context);
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -31,11 +37,11 @@ class SuggestionPills extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: disabled ? Colors.grey.shade300 : NeoColors.white,
-                  border: Border.all(color: NeoColors.black, width: 2),
+                  color: disabled ? disabledBg : surfaceCol,
+                  border: Border.all(color: borderCol, width: 2),
                   boxShadow: [
                     BoxShadow(
-                      color: NeoColors.black,
+                      color: NeoColors.shadow(context),
                       offset: disabled ? Offset.zero : const Offset(2, 2),
                     ),
                   ],
@@ -45,7 +51,7 @@ class SuggestionPills extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w900,
-                    color: disabled ? Colors.grey.shade600 : NeoColors.black,
+                    color: disabled ? disabledText : textCol,
                     letterSpacing: 0.3,
                   ),
                 ),
