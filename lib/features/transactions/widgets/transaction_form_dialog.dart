@@ -17,6 +17,7 @@ class TransactionFormDialog {
     required String userId,
     required List<CategoryModel> categories,
     TransactionModel? editingTx,
+    int? currentBalance,
     required Future<void> Function(TransactionModel tx) onSave,
   }) {
     return NeoModal.show(
@@ -26,6 +27,7 @@ class TransactionFormDialog {
         userId: userId,
         categories: categories,
         editingTx: editingTx,
+        currentBalance: currentBalance,
         onSave: onSave,
       ),
     );
@@ -36,12 +38,14 @@ class _TransactionFormContent extends StatefulWidget {
   final String userId;
   final List<CategoryModel> categories;
   final TransactionModel? editingTx;
+  final int? currentBalance;
   final Future<void> Function(TransactionModel tx) onSave;
 
   const _TransactionFormContent({
     required this.userId,
     required this.categories,
     this.editingTx,
+    this.currentBalance,
     required this.onSave,
   });
 
@@ -56,6 +60,7 @@ class _TransactionFormContentState extends State<_TransactionFormContent> {
   late TextEditingController _descController;
   late DateTime _selectedDate;
   bool _isSaving = false;
+  String? _nominalError;
 
   bool get _isSystemAdjustment =>
       widget.editingTx != null &&
@@ -109,6 +114,9 @@ class _TransactionFormContentState extends State<_TransactionFormContent> {
   }
 
   void _onNominalChanged(String val) {
+    if (_nominalError != null) {
+      setState(() => _nominalError = null);
+    }
     final clean = val.replaceAll(RegExp(r'\D'), '');
     if (clean.isEmpty) {
       _nominalController.value = const TextEditingValue(text: '');
@@ -127,16 +135,33 @@ class _TransactionFormContentState extends State<_TransactionFormContent> {
     final nominal = int.tryParse(clean) ?? 0;
 
     if (nominal <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Nominal harus lebih dari 0'),
-          backgroundColor: NeoColors.warningYellow,
-        ),
-      );
+      setState(() => _nominalError = 'Nominal harus lebih dari Rp 0');
       return;
     }
 
-    setState(() => _isSaving = true);
+    if (_type == 'expense' && widget.currentBalance != null) {
+      int availableBalance = widget.currentBalance!;
+      if (widget.editingTx != null) {
+        if (widget.editingTx!.isExpense) {
+          availableBalance += widget.editingTx!.nominal;
+        } else {
+          availableBalance -= widget.editingTx!.nominal;
+        }
+      }
+      if (nominal > availableBalance) {
+        final safeAvail = availableBalance < 0 ? 0 : availableBalance;
+        setState(() {
+          _nominalError =
+              'Saldo tidak mencukupi! Maksimal pengeluaran ${CurrencyFormatter.formatRupiah(safeAvail)}.';
+        });
+        return;
+      }
+    }
+
+    setState(() {
+      _nominalError = null;
+      _isSaving = true;
+    });
 
     try {
       final fallbackCategories = (widget.categories.isNotEmpty
@@ -226,6 +251,7 @@ class _TransactionFormContentState extends State<_TransactionFormContent> {
                   AudioService().playClickSound();
                   setState(() {
                     _type = 'expense';
+                    _nominalError = null;
                     _categoryName = _resolveCategory('expense', _categoryName);
                   });
                 },
@@ -256,6 +282,7 @@ class _TransactionFormContentState extends State<_TransactionFormContent> {
                   AudioService().playClickSound();
                   setState(() {
                     _type = 'income';
+                    _nominalError = null;
                     _categoryName = _resolveCategory('income', _categoryName);
                   });
                 },
@@ -332,6 +359,7 @@ class _TransactionFormContentState extends State<_TransactionFormContent> {
           controller: _nominalController,
           keyboardType: TextInputType.number,
           hintText: '50.000',
+          errorText: _nominalError,
           onChanged: _onNominalChanged,
         ),
         const SizedBox(height: 14),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/audio_service.dart';
+import '../../core/services/spending_anomaly_detector.dart';
 import '../../core/theme/neo_colors.dart';
 import '../../core/utils/currency_formatter.dart';
 import '../../features/auth/providers/auth_provider.dart';
@@ -67,6 +68,18 @@ class NeoAppBar extends ConsumerWidget implements PreferredSizeWidget {
 
     final notifications = <_NotificationItem>[];
     var hasAlert = false;
+
+    final dailyAnomaly = ref.watch(dailyAnomalyProvider);
+    if (dailyAnomaly.isAnomaly) {
+      hasAlert = true;
+      final isCritical = dailyAnomaly.severity == AnomalySeverity.critical;
+      notifications.add(_NotificationItem(
+        icon: isCritical ? Icons.bolt : Icons.warning_amber_rounded,
+        accentColor: isCritical ? NeoColors.dangerRedLight : NeoColors.yellowAccent,
+        title: dailyAnomaly.title,
+        body: dailyAnomaly.message,
+      ));
+    }
 
     if (txs.isNotEmpty && balance <= 0) {
       hasAlert = true;

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/services/audio_service.dart';
@@ -12,6 +14,8 @@ class SettingsState {
   final bool isAiMuted;
   final bool isReminderActive;
   final String reminderTime;
+  final bool isAnomalyAlertEnabled;
+  final int dailySpendingLimit; // 0 = deteksi otomatis berbasis pola transaksi
 
   const SettingsState({
     this.savingsTarget = 5000000,
@@ -20,6 +24,8 @@ class SettingsState {
     this.isAiMuted = false,
     this.isReminderActive = false,
     this.reminderTime = '08:00',
+    this.isAnomalyAlertEnabled = true,
+    this.dailySpendingLimit = 0,
   });
 
   SettingsState copyWith({
@@ -29,6 +35,8 @@ class SettingsState {
     bool? isAiMuted,
     bool? isReminderActive,
     String? reminderTime,
+    bool? isAnomalyAlertEnabled,
+    int? dailySpendingLimit,
   }) {
     return SettingsState(
       savingsTarget: savingsTarget ?? this.savingsTarget,
@@ -37,6 +45,8 @@ class SettingsState {
       isAiMuted: isAiMuted ?? this.isAiMuted,
       isReminderActive: isReminderActive ?? this.isReminderActive,
       reminderTime: reminderTime ?? this.reminderTime,
+      isAnomalyAlertEnabled: isAnomalyAlertEnabled ?? this.isAnomalyAlertEnabled,
+      dailySpendingLimit: dailySpendingLimit ?? this.dailySpendingLimit,
     );
   }
 }
@@ -52,6 +62,8 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
   String _targetKey(String uid) => 'smartfi_savings_target_$uid';
   String _reminderActiveKey(String uid) => 'smartfi_reminder_active_$uid';
   String _reminderTimeKey(String uid) => 'smartfi_reminder_time_$uid';
+  String _anomalyEnabledKey(String uid) => 'smartfi_anomaly_enabled_$uid';
+  String _dailyLimitKey(String uid) => 'smartfi_daily_limit_$uid';
 
   void _init() {
     loadSettings();
@@ -71,6 +83,8 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
           savingsTarget: 5000000,
           isReminderActive: false,
           reminderTime: '08:00',
+          isAnomalyAlertEnabled: true,
+          dailySpendingLimit: 0,
         );
       }
       await NotificationService().scheduleDailyReminder(
@@ -85,20 +99,27 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     final reminderActive = user.reminderEnabled;
     final reminderTime = user.reminderTime.isNotEmpty ? user.reminderTime : '08:00';
 
+    bool anomalyEnabled = true;
+    int dailyLimit = 0;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      anomalyEnabled = prefs.getBool(_anomalyEnabledKey(user.id)) ?? true;
+      dailyLimit = prefs.getInt(_dailyLimitKey(user.id)) ?? 0;
+      await prefs.setInt(_targetKey(user.id), target);
+      await prefs.setBool(_reminderActiveKey(user.id), reminderActive);
+      await prefs.setString(_reminderTimeKey(user.id), reminderTime);
+    } catch (_) {}
+
     if (mounted) {
       state = state.copyWith(
         savingsTarget: target,
         isReminderActive: reminderActive,
         reminderTime: reminderTime,
+        isAnomalyAlertEnabled: anomalyEnabled,
+        dailySpendingLimit: dailyLimit,
       );
     }
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt(_targetKey(user.id), target);
-      await prefs.setBool(_reminderActiveKey(user.id), reminderActive);
-      await prefs.setString(_reminderTimeKey(user.id), reminderTime);
-    } catch (_) {}
 
     await NotificationService().scheduleDailyReminder(
       isEnabled: reminderActive,
@@ -123,6 +144,9 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
         final reminderTime = currentUser.reminderTime.isNotEmpty
             ? currentUser.reminderTime
             : (prefs.getString(_reminderTimeKey(currentUser.id)) ?? '08:00');
+        final anomalyEnabled =
+            prefs.getBool(_anomalyEnabledKey(currentUser.id)) ?? true;
+        final dailyLimit = prefs.getInt(_dailyLimitKey(currentUser.id)) ?? 0;
 
         if (!mounted) return;
         state = SettingsState(
@@ -132,6 +156,8 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
           isAiMuted: aiMuted,
           isReminderActive: reminderActive,
           reminderTime: reminderTime,
+          isAnomalyAlertEnabled: anomalyEnabled,
+          dailySpendingLimit: dailyLimit,
         );
 
         await NotificationService().scheduleDailyReminder(
@@ -177,17 +203,39 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     await AudioService().setAiMuted(newVal);
   }
 
-  Future<void> setReminder({required bool isActive, required String time}) async {
-    state = state.copyWith(isReminderActive: isActive, reminderTime: time);
+  Future<void> setReminder({
+    required bool isActive,
+    required String time,
+    bool? isAnomalyAlertEnabled,
+    int? dailySpendingLimit,
+  }) async {
+    final nextAnomalyEnabled =
+        isAnomalyAlertEnabled ?? state.isAnomalyAlertEnabled;
+    final nextDailyLimit = dailySpendingLimit ?? state.dailySpendingLimit;
+
+    state = state.copyWith(
+      isReminderActive: isActive,
+      reminderTime: time,
+      isAnomalyAlertEnabled: nextAnomalyEnabled,
+      dailySpendingLimit: nextDailyLimit,
+    );
+
     final uid = _activeUserId ?? _ref.read(authStateProvider).asData?.value?.id;
     if (uid != null) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_reminderActiveKey(uid), isActive);
       await prefs.setString(_reminderTimeKey(uid), time);
-      await _ref.read(authRepositoryProvider).updateProfile(
-            reminderEnabled: isActive,
-            reminderTime: time,
-          );
+      await prefs.setBool(_anomalyEnabledKey(uid), nextAnomalyEnabled);
+      await prefs.setInt(_dailyLimitKey(uid), nextDailyLimit);
+      unawaited(
+        _ref
+            .read(authRepositoryProvider)
+            .updateProfile(
+              reminderEnabled: isActive,
+              reminderTime: time,
+            )
+            .catchError((_) {}),
+      );
     }
     await NotificationService().scheduleDailyReminder(
       isEnabled: isActive,
@@ -199,4 +247,3 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
 final settingsProvider = StateNotifierProvider<SettingsNotifier, SettingsState>((ref) {
   return SettingsNotifier(ref);
 });
-

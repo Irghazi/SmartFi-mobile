@@ -1,18 +1,63 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/transaction_model.dart';
 import '../transaction_repository.dart';
 
 /// Implementasi Cloud Firestore untuk Penyimpanan Transaksi Pengguna
+/// Menggunakan local-first persistence + real-time snapshots agar UI selalu responsif instan.
 class FirebaseTransactionRepository implements TransactionRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  static const Duration _fastWriteAckTimeout = Duration(milliseconds: 900);
+  static const Duration _readTimeout = Duration(seconds: 4);
 
   String? _resolveUserId(String passedUserId) {
     if (passedUserId.isNotEmpty && passedUserId != 'default_user') {
       return passedUserId;
     }
     return _auth.currentUser?.uid;
+  }
+
+  /// Firestore dengan offline persistence langsung menulis ke cache lokal & memicu
+  /// `snapshots()` secara instan (<10ms). Timeout singkat mencegah UI macet saat sinyal lambat/offline.
+  Future<void> _commitFast(Future<void> writeOperation) async {
+    try {
+      await writeOperation.timeout(_fastWriteAckTimeout);
+    } on TimeoutException {
+      // Sudah tersimpan di cache lokal Firestore dan akan sinkron otomatis ke server.
+    }
+  }
+
+  List<TransactionModel> _mapSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+    String uid,
+  ) {
+    final list = snapshot.docs.map((doc) {
+      return TransactionModel.fromJson({
+        ...doc.data(),
+        'id': doc.id,
+        'userId': uid,
+      });
+    }).toList();
+    list.sort((a, b) => b.transactionDate.compareTo(a.transactionDate));
+    return list;
+  }
+
+  @override
+  Stream<List<TransactionModel>>? watchTransactions(String userId) {
+    final uid = _resolveUserId(userId);
+    if (uid == null) return null;
+
+    return _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('transactions')
+        .orderBy('transactionDate', descending: true)
+        .snapshots()
+        .map((snap) => _mapSnapshot(snap, uid));
   }
 
   @override
@@ -43,14 +88,14 @@ class FirebaseTransactionRepository implements TransactionRepository {
       query = query.where('type', isEqualTo: type);
     }
 
-    final snapshot = await query.get();
-    return snapshot.docs.map((doc) {
-      return TransactionModel.fromJson({
-        ...doc.data(),
-        'id': doc.id,
-        'userId': uid,
-      });
-    }).toList();
+    QuerySnapshot<Map<String, dynamic>> snapshot;
+    try {
+      snapshot = await query.get().timeout(_readTimeout);
+    } catch (_) {
+      snapshot = await query.get(const GetOptions(source: Source.cache));
+    }
+
+    return _mapSnapshot(snapshot, uid);
   }
 
   @override
@@ -75,10 +120,10 @@ class FirebaseTransactionRepository implements TransactionRepository {
       'categoryId': transaction.categoryId,
       'categoryName': transaction.categoryName,
       'transactionDate': Timestamp.fromDate(transaction.transactionDate),
-      'createdAt': FieldValue.serverTimestamp(),
+      'createdAt': Timestamp.fromDate(transaction.createdAt),
     };
 
-    await docRef.set(data);
+    await _commitFast(docRef.set(data));
     return transaction.copyWith(id: docRef.id, userId: uid);
   }
 
@@ -107,10 +152,10 @@ class FirebaseTransactionRepository implements TransactionRepository {
       'categoryId': transaction.categoryId,
       'categoryName': transaction.categoryName,
       'transactionDate': Timestamp.fromDate(transaction.transactionDate),
-      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
     };
 
-    await docRef.set(data, SetOptions(merge: true));
+    await _commitFast(docRef.set(data, SetOptions(merge: true)));
   }
 
   @override
@@ -120,12 +165,13 @@ class FirebaseTransactionRepository implements TransactionRepository {
       throw Exception('Sesi login tidak ditemukan. Silakan masuk kembali.');
     }
 
-    await _firestore
+    final docRef = _firestore
         .collection('users')
         .doc(uid)
         .collection('transactions')
-        .doc(transactionId)
-        .delete();
+        .doc(transactionId);
+
+    await _commitFast(docRef.delete());
   }
 
   @override
@@ -147,7 +193,12 @@ class FirebaseTransactionRepository implements TransactionRepository {
       query = query.where('transactionDate', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfYear));
     }
 
-    final snapshot = await query.get();
+    QuerySnapshot<Map<String, dynamic>> snapshot;
+    try {
+      snapshot = await query.get().timeout(_readTimeout);
+    } catch (_) {
+      snapshot = await query.get(const GetOptions(source: Source.cache));
+    }
     if (snapshot.docs.isEmpty) return;
 
     const batchLimit = 500;
@@ -159,7 +210,7 @@ class FirebaseTransactionRepository implements TransactionRepository {
       for (final doc in snapshot.docs.sublist(i, end)) {
         batch.delete(doc.reference);
       }
-      await batch.commit();
+      await _commitFast(batch.commit());
     }
   }
 

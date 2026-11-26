@@ -1,22 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/audio_service.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../core/theme/neo_colors.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../../shared/widgets/neo_button.dart';
 import '../../../shared/widgets/neo_card.dart';
+import '../../../shared/widgets/neo_input.dart';
 import '../providers/settings_provider.dart';
 
-/// Kartu pengaturan pengingat harian pencatatan keuangan
+/// Kartu pengaturan pengingat harian & deteksi anomali pengeluaran harian
 class NotificationSettingsCard extends ConsumerStatefulWidget {
   const NotificationSettingsCard({super.key});
 
   @override
-  ConsumerState<NotificationSettingsCard> createState() => _NotificationSettingsCardState();
+  ConsumerState<NotificationSettingsCard> createState() =>
+      _NotificationSettingsCardState();
 }
 
-class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsCard> {
+class _NotificationSettingsCardState
+    extends ConsumerState<NotificationSettingsCard> {
+  final TextEditingController _dailyLimitController = TextEditingController();
   bool _isActive = false;
   String _timeStr = '08:00';
+  bool _isAnomalyEnabled = true;
+  int _rawDailyLimit = 0;
   bool _isInit = false;
   bool _isLoading = false;
   bool _hasEdited = false;
@@ -28,8 +36,36 @@ class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsC
       final s = ref.read(settingsProvider);
       _isActive = s.isReminderActive;
       _timeStr = s.reminderTime;
+      _isAnomalyEnabled = s.isAnomalyAlertEnabled;
+      _rawDailyLimit = s.dailySpendingLimit;
+      _dailyLimitController.text = _rawDailyLimit > 0
+          ? CurrencyFormatter.formatRupiah(_rawDailyLimit)
+          : '';
       _isInit = true;
     }
+  }
+
+  @override
+  void dispose() {
+    _dailyLimitController.dispose();
+    super.dispose();
+  }
+
+  void _onDailyLimitChanged(String val) {
+    _hasEdited = true;
+    final clean = val.replaceAll(RegExp(r'\D'), '');
+    if (clean.isEmpty) {
+      _rawDailyLimit = 0;
+      _dailyLimitController.value = const TextEditingValue(text: '');
+      return;
+    }
+    final parsed = int.tryParse(clean) ?? 0;
+    _rawDailyLimit = parsed;
+    final formatted = CurrencyFormatter.formatRupiah(parsed);
+    _dailyLimitController.value = TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
   }
 
   Future<void> _selectTime() async {
@@ -83,12 +119,14 @@ class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsC
       await ref.read(settingsProvider.notifier).setReminder(
             isActive: _isActive,
             time: _timeStr,
+            isAnomalyAlertEnabled: _isAnomalyEnabled,
+            dailySpendingLimit: _rawDailyLimit,
           );
       _hasEdited = false;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Pengaturan pengingat berhasil diperbarui!'),
+            content: Text('Pengaturan pengingat & deteksi anomali diperbarui!'),
             backgroundColor: NeoColors.successGreen,
           ),
         );
@@ -97,13 +135,27 @@ class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsC
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gagal memperbarui pengingat: ${e.toString().replaceFirst('Exception: ', '')}'),
+            content: Text(
+              'Gagal memperbarui pengingat: ${e.toString().replaceFirst('Exception: ', '')}',
+            ),
             backgroundColor: NeoColors.dangerRed,
           ),
         );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleTestNotification() async {
+    await NotificationService().showTestNotification();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Notifikasi uji coba dikirim! Periksa bilah status HP Anda.'),
+          backgroundColor: NeoColors.primaryBlue,
+        ),
+      );
     }
   }
 
@@ -114,6 +166,11 @@ class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsC
         setState(() {
           _isActive = next.isReminderActive;
           _timeStr = next.reminderTime;
+          _isAnomalyEnabled = next.isAnomalyAlertEnabled;
+          _rawDailyLimit = next.dailySpendingLimit;
+          _dailyLimitController.text = _rawDailyLimit > 0
+              ? CurrencyFormatter.formatRupiah(_rawDailyLimit)
+              : '';
         });
       }
     });
@@ -145,7 +202,7 @@ class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsC
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'PENGINGAT HARIAN',
+                      'PENGINGAT & ANOMALI',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w900,
@@ -153,7 +210,7 @@ class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsC
                       ),
                     ),
                     Text(
-                      'NOTIFIKASI CATAT PENGELUARAN',
+                      'PENGINGAT HARIAN & DETEKSI BOROS',
                       style: TextStyle(
                         fontSize: 9,
                         fontWeight: FontWeight.bold,
@@ -168,7 +225,7 @@ class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsC
           ),
           const SizedBox(height: 16),
 
-          // Switch Aktifkan Pengingat
+          // Switch Aktifkan Pengingat Harian
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
@@ -178,12 +235,23 @@ class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsC
             ),
             child: Row(
               children: [
-                const Expanded(
-                  child: Text(
-                    'STATUS PENGINGAT',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'PENGINGAT CATAT HARIAN',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        'Ingatkan catat uang tiap hari',
+                        style: TextStyle(fontSize: 9, color: mutedCol),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -232,7 +300,11 @@ class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsC
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.access_time, size: 16, color: _isActive ? textCol : mutedCol),
+                      Icon(
+                        Icons.access_time,
+                        size: 16,
+                        color: _isActive ? textCol : mutedCol,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         _timeStr,
@@ -248,13 +320,78 @@ class _NotificationSettingsCardState extends ConsumerState<NotificationSettingsC
               ),
             ),
           ),
+          const SizedBox(height: 12),
+
+          // Switch Deteksi Anomali Pengeluaran Harian
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: secondaryCol,
+              border: Border.all(color: borderCol, width: 2),
+              boxShadow: NeoColors.hardShadow(offset: 2),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'DETEKSI ANOMALI HARIAN',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        'Peringatan jika pengeluaran hari ini melonjak',
+                        style: TextStyle(fontSize: 9, color: mutedCol),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Switch(
+                  value: _isAnomalyEnabled,
+                  activeTrackColor: NeoColors.yellowAccent,
+                  activeThumbColor: NeoColors.warningYellow,
+                  onChanged: (val) {
+                    AudioService().playClickSound();
+                    setState(() {
+                      _hasEdited = true;
+                      _isAnomalyEnabled = val;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          if (_isAnomalyEnabled) ...[
+            const SizedBox(height: 10),
+            NeoInput(
+              label: 'Batas Harian Kustom (Opsional)',
+              controller: _dailyLimitController,
+              hintText: 'Kosong = otomatis (>= 2x rata-rata)',
+              keyboardType: TextInputType.number,
+              onChanged: _onDailyLimitChanged,
+            ),
+          ],
           const SizedBox(height: 16),
 
           NeoButton(
-            text: _isLoading ? 'MENYIMPAN...' : 'SIMPAN PENGINGAT',
+            text: _isLoading ? 'MENYIMPAN...' : 'SIMPAN PENGATURAN',
             backgroundColor: NeoColors.primaryBlue,
             textColor: NeoColors.white,
             onPressed: _isLoading ? null : _handleSave,
+          ),
+          const SizedBox(height: 10),
+          NeoButton(
+            text: 'UJI NOTIFIKASI',
+            variant: NeoButtonVariant.outline,
+            icon: Icon(Icons.notifications_none, size: 18, color: textCol),
+            onPressed: _handleTestNotification,
           ),
         ],
       ),

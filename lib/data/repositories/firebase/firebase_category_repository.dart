@@ -1,12 +1,18 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/category_model.dart';
 import '../category_repository.dart';
 
 /// Implementasi Cloud Firestore untuk Penyimpanan Kategori Transaksi Pengguna
+/// Menggunakan real-time snapshots + local-first commit agar perubahan langsung tampil.
 class FirebaseCategoryRepository implements CategoryRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  static const Duration _fastWriteAckTimeout = Duration(milliseconds: 900);
+  static const Duration _readTimeout = Duration(seconds: 4);
 
   String? _resolveUserId(String passedUserId) {
     if (passedUserId.isNotEmpty && passedUserId != 'default_user') {
@@ -15,27 +21,66 @@ class FirebaseCategoryRepository implements CategoryRepository {
     return _auth.currentUser?.uid;
   }
 
+  Future<void> _commitFast(Future<void> writeOperation) async {
+    try {
+      await writeOperation.timeout(_fastWriteAckTimeout);
+    } on TimeoutException {
+      // Sudah tertulis di cache lokal Firestore dan akan sinkron otomatis ke server.
+    }
+  }
+
+  List<CategoryModel> _mapSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    return snapshot.docs.map((doc) {
+      final data = doc.data();
+      return CategoryModel.fromJson({...data, 'id': doc.id});
+    }).toList();
+  }
+
+  @override
+  Stream<List<CategoryModel>>? watchCategories(String userId) {
+    final uid = _resolveUserId(userId);
+    if (uid == null) return null;
+
+    var seeded = false;
+    final col = _firestore.collection('users').doc(uid).collection('categories');
+
+    return col.orderBy('createdAt', descending: false).snapshots().map((snap) {
+      if (snap.docs.isEmpty && !seeded) {
+        seeded = true;
+        unawaited(seedDefaultCategories(uid).catchError((_) {}));
+        return CategoryModel.defaultCategories
+            .map((c) => c.copyWith(userId: uid))
+            .toList();
+      }
+      return _mapSnapshot(snap);
+    });
+  }
+
   @override
   Future<List<CategoryModel>> getCategories(String userId) async {
     final uid = _resolveUserId(userId);
     if (uid == null) return [];
 
     final col = _firestore.collection('users').doc(uid).collection('categories');
-    final snapshot = await col.orderBy('createdAt', descending: false).get();
+    QuerySnapshot<Map<String, dynamic>> snapshot;
+    try {
+      snapshot = await col.orderBy('createdAt', descending: false).get().timeout(_readTimeout);
+    } catch (_) {
+      snapshot = await col
+          .orderBy('createdAt', descending: false)
+          .get(const GetOptions(source: Source.cache));
+    }
 
     if (snapshot.docs.isEmpty) {
       await seedDefaultCategories(uid);
-      final refetched = await col.orderBy('createdAt', descending: false).get();
-      return refetched.docs.map((doc) {
-        final data = doc.data();
-        return CategoryModel.fromJson({...data, 'id': doc.id});
-      }).toList();
+      return CategoryModel.defaultCategories
+          .map((c) => c.copyWith(userId: uid))
+          .toList();
     }
 
-    return snapshot.docs.map((doc) {
-      final data = doc.data();
-      return CategoryModel.fromJson({...data, 'id': doc.id});
-    }).toList();
+    return _mapSnapshot(snapshot);
   }
 
   @override
@@ -55,10 +100,10 @@ class FirebaseCategoryRepository implements CategoryRepository {
       'iconName': category.iconName,
       'colorHex': category.colorHex,
       'isDefault': false,
-      'createdAt': FieldValue.serverTimestamp(),
+      'createdAt': Timestamp.fromDate(category.createdAt),
     };
 
-    await docRef.set(data);
+    await _commitFast(docRef.set(data));
     return category.copyWith(id: docRef.id, userId: uid);
   }
 
@@ -76,12 +121,19 @@ class FirebaseCategoryRepository implements CategoryRepository {
       'type': category.type,
       'iconName': category.iconName,
       'colorHex': category.colorHex,
-      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
     };
 
-    await docRef.update(data);
+    await _commitFast(docRef.update(data));
 
-    // Sinkronkan nama kategori pada transaksi terkait agar grafik dan riwayat tetap akurat
+    // Sinkronkan nama kategori pada transaksi terkait di latar belakang agar UI tidak tertahan
+    unawaited(_syncCategoryNameToTransactions(userDoc, category));
+  }
+
+  Future<void> _syncCategoryNameToTransactions(
+    DocumentReference<Map<String, dynamic>> userDoc,
+    CategoryModel category,
+  ) async {
     try {
       final txSnap = await userDoc
           .collection('transactions')
@@ -117,18 +169,26 @@ class FirebaseCategoryRepository implements CategoryRepository {
         .collection('categories')
         .doc(categoryId);
 
-    final snapshot = await docRef.get();
-    if (snapshot.exists && snapshot.data()?['isDefault'] == true) {
-      throw Exception('Kategori bawaan tidak dapat dihapus.');
+    try {
+      final snapshot = await docRef
+          .get(const GetOptions(source: Source.cache))
+          .catchError((_) => docRef.get().timeout(_readTimeout));
+      if (snapshot.exists && snapshot.data()?['isDefault'] == true) {
+        throw Exception('Kategori bawaan tidak dapat dihapus.');
+      }
+    } catch (e) {
+      if (e.toString().contains('Kategori bawaan')) rethrow;
     }
 
-    await docRef.delete();
+    await _commitFast(docRef.delete());
   }
 
   Future<void> seedDefaultCategories(String userId) async {
     final col = _firestore.collection('users').doc(userId).collection('categories');
-    final existing = await col.limit(1).get();
-    if (existing.docs.isNotEmpty) return; // Mencegah duplikasi
+    try {
+      final existing = await col.limit(1).get().timeout(_readTimeout);
+      if (existing.docs.isNotEmpty) return; // Mencegah duplikasi
+    } catch (_) {}
 
     final batch = _firestore.batch();
     for (final defCat in CategoryModel.defaultCategories) {
@@ -141,10 +201,10 @@ class FirebaseCategoryRepository implements CategoryRepository {
         'iconName': defCat.iconName,
         'colorHex': defCat.colorHex,
         'isDefault': true,
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': Timestamp.fromDate(defCat.createdAt),
       };
       batch.set(docRef, data, SetOptions(merge: true));
     }
-    await batch.commit();
+    await _commitFast(batch.commit());
   }
 }

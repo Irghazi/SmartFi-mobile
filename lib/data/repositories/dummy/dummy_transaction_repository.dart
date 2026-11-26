@@ -62,10 +62,14 @@ class DummyTransactionRepository implements TransactionRepository {
   }
 
   @override
-  Future<void> addTransaction(TransactionModel transaction) async {
+  Stream<List<TransactionModel>>? watchTransactions(String userId) => null;
+
+  @override
+  Future<TransactionModel> addTransaction(TransactionModel transaction) async {
     final current = await getTransactions(transaction.userId);
     current.insert(0, transaction);
     await _saveTransactions(transaction.userId, current);
+    return transaction;
   }
 
   @override

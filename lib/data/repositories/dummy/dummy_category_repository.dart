@@ -9,6 +9,9 @@ class DummyCategoryRepository implements CategoryRepository {
   String _getKey(String userId) => '$_categoriesKey$userId';
 
   @override
+  Stream<List<CategoryModel>>? watchCategories(String userId) => null;
+
+  @override
   Future<List<CategoryModel>> getCategories(String userId) async {
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = prefs.getString(_getKey(userId));

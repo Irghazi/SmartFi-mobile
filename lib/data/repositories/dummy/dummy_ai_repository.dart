@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../../../core/services/ai_topic_guard.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/category_model.dart';
 import '../../../features/ai_advisor/models/chat_message.dart';
@@ -12,24 +13,34 @@ class DummyAiRepository implements AiRepository {
     required List<ChatMessage> history,
     required String financialContextJson,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 700));
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    // 1. Pre-filter ketat (kode pemrograman, prompt injection, topik luar keuangan)
+    final refusal = AiTopicGuard.validateUserInput(message);
+    if (refusal != null) {
+      return refusal;
+    }
+
+    // 2. Sapaan ramah tanpa membocorkan data keuangan
+    if (AiTopicGuard.isGreeting(message)) {
+      return 'Halo! Aku SmartFi, mentor keuangan pribadimu. Ada yang ingin kamu diskusikan tentang anggaran, saldo, atau pengeluaranmu hari ini?';
+    }
+
+    // 3. Tolak pertanyaan non-keuangan di mode offline agar tidak membalas analisis yang tidak nyambung
+    if (!AiTopicGuard.isLikelyFinanceOrAppTopic(message)) {
+      return AiTopicGuard.offTopicRefusalMessage;
+    }
 
     final lower = message.toLowerCase();
-
-    // Sapaan ramah tanpa data keuangan
-    if (lower == 'halo' || lower == 'hai' || lower == 'apa kabar' || lower == 'selamat pagi' || lower == 'pagi') {
-      return 'Halo! Aku SmartFi, mentor keuangan pribadimu. Ada yang ingin kamu diskusikan tentang anggaran atau pengeluaranmu hari ini?';
-    }
-
-    // Topik di luar keuangan
-    if (lower.contains('python') || lower.contains('coding') || lower.contains('resep') || lower.contains('puisi')) {
-      return 'Maaf ya, sebagai SmartFi aku khusus dirancang untuk mendampingi urusan keuangan dan anggaran pribadimu saja. Yuk, tanyakan seputar saldo, pengeluaran, atau tips menabung!';
-    }
 
     // Parse financial context
     int saldo = 0;
     int totalIncome = 0;
     int totalExpense = 0;
+    int todayExpense = 0;
+    int dailyAverage = 0;
+    bool isAnomaly = false;
+    String anomalyMessage = '';
     String topCategory = 'Makanan';
     int topCategoryAmount = 0;
 
@@ -38,29 +49,55 @@ class DummyAiRepository implements AiRepository {
       saldo = (contextData['saldo_terkini'] as num?)?.toInt() ?? 0;
       totalIncome = (contextData['total_pemasukan'] as num?)?.toInt() ?? 0;
       totalExpense = (contextData['total_pengeluaran'] as num?)?.toInt() ?? 0;
+      todayExpense = (contextData['pengeluaran_hari_ini'] as num?)?.toInt() ?? 0;
+      dailyAverage = (contextData['rata_rata_pengeluaran_harian'] as num?)?.toInt() ?? 0;
       topCategory = contextData['kategori_terbesar'] as String? ?? 'Makanan';
       topCategoryAmount = (contextData['nominal_kategori_terbesar'] as num?)?.toInt() ?? 0;
+      final anomalyObj = contextData['status_anomali_hari_ini'];
+      if (anomalyObj is Map<String, dynamic>) {
+        isAnomaly = anomalyObj['is_anomali'] == true;
+        anomalyMessage = anomalyObj['pesan'] as String? ?? '';
+      }
     } catch (_) {}
 
     final formattedSaldo = CurrencyFormatter.formatRupiah(saldo);
     final formattedIncome = CurrencyFormatter.formatRupiah(totalIncome);
     final formattedExpense = CurrencyFormatter.formatRupiah(totalExpense);
+    final formattedTodayExpense = CurrencyFormatter.formatRupiah(todayExpense);
+    final formattedDailyAvg = CurrencyFormatter.formatRupiah(dailyAverage);
     final formattedTopCatAmount = CurrencyFormatter.formatRupiah(topCategoryAmount);
 
-    if (lower.contains('terbesar') || lower.contains('pengeluaran terbesar')) {
+    if (lower.contains('anomali') || lower.contains('hari ini') || lower.contains('boros')) {
+      if (isAnomaly) {
+        return '''
+### Evaluasi Pengeluaran Hari Ini
+$anomalyMessage
+
+### Langkah Cepat Agar Tetap Aman
+1. Tahan pengeluaran non-esensial selama 1 sampai 2 hari ke depan untuk menyeimbangkan anggaran mingguanmu.
+2. Cek kembali kategori terbesar hari ini dan pisahkan mana kebutuhan wajib dan mana pengeluaran impulsif.
+3. Aktifkan batas pengeluaran harian di menu Pengaturan agar kamu langsung mendapat peringatan sebelum melebihi anggaran.
+''';
+      }
       return '''
-Berdasarkan catatan keuanganmu, pengeluaran terbesarmu saat ini ada di kategori **$topCategory** sebesar **$formattedTopCatAmount**. 
+Pengeluaranmu hari ini tercatat sebesar **$formattedTodayExpense**${dailyAverage > 0 ? ' (rata-rata harianmu **$formattedDailyAvg**)' : ''}. Belum ada lonjakan anomali yang terdeteksi hari ini. Pertahankan disiplin pencatatanmu ya!
+''';
+    }
+
+    if (lower.contains('terbesar') || lower.contains('pengeluaran terbesar') || lower.contains('terbanyak')) {
+      return '''
+Berdasarkan catatan keuanganmu, pengeluaran terbesarmu saat ini ada di kategori **$topCategory** sebesar **$formattedTopCatAmount**.
 
 Saran dariku, coba tinjau kembali pos ini dan tetapkan batas mingguan agar sisa anggaranmu tetap aman hingga akhir bulan.
 ''';
     }
 
-    if (lower.contains('hemat') || lower.contains('saran hemat')) {
+    if (lower.contains('hemat') || lower.contains('saran hemat') || lower.contains('tips')) {
       return '''
 Berikut 3 saran hemat yang bisa kamu terapkan:
 
 1. Buat daftar belanja sebelum bepergian untuk mencegah pengeluaran impulsif di luar kebutuhan pokok.
-2. Kurangi jajan di luar untuk kategori **$topCategory**, alokasikan maksimal **Rp 50.000** per hari.
+2. Kurangi pengeluaran pada kategori **$topCategory**, alokasikan batas harian yang realistis sesuai anggaranmu.
 3. Sisihkan minimal 10% dari setiap pemasukan langsung ke rekening tabungan di awal bulan.
 ''';
     }
@@ -72,10 +109,10 @@ Saat ini saldo aktifmu berada di angka **$formattedSaldo** (Pemasukan: **$format
 ### 3 Saran Praktis untuk Kamu
 1. Batasi transaksi konsumtif pada kategori **$topCategory** agar rasio tabunganmu meningkat.
 2. Catat segera setiap transaksi kecil di bawah **Rp 20.000** karena sering kali tidak terasa menumpuk.
-3. Tetapkan target tabungan bulanan yang realistis agar progress finansialmu terukur.
+3. Tetapkan target tabungan bulanan dan batas harian di Pengaturan agar progress finansialmu selalu terpantau.
 
 ### Prediksi Saldo Akhir Bulan
-Dengan pola pengeluaran saat ini, arus kasmu diproyeksikan tetap stabil hingga akhir bulan jika kamu menekan pengeluaran tambahan.
+Dengan pola pengeluaran saat ini, arus kasmu diproyeksikan tetap stabil hingga akhir bulan jika kamu menjaga pengeluaran tambahan tetap terkendali.
 ''';
   }
 
@@ -84,7 +121,7 @@ Dengan pola pengeluaran saat ini, arus kasmu diproyeksikan tetap stabil hingga a
     required String prompt,
     required List<String> categories,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 300));
+    await Future.delayed(const Duration(milliseconds: 250));
     final catModels = categories
         .map((c) => CategoryModel(
               id: c,

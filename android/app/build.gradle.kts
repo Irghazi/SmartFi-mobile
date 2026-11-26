@@ -30,6 +30,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    androidResources {
+        noCompress += listOf("mp3", "wav", "ogg")
+    }
+
     defaultConfig {
         applicationId = "smartfi.app.mobile"
         minSdk = flutter.minSdkVersion
@@ -54,6 +58,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
         release {
             signingConfig = if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")

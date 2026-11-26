@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../../models/category_model.dart';
@@ -39,7 +41,17 @@ class FirebaseAuthRepository implements AuthRepository {
           return 'Gagal terhubung ke internet. Periksa koneksi jaringan Anda.';
         case 'account-exists-with-different-credential':
           return 'Akun dengan email ini sudah terdaftar menggunakan metode masuk lain.';
+        case 'web-context-canceled':
+        case 'canceled':
+        case 'popup-closed-by-user':
+          return 'Proses masuk dengan Google dibatalkan pengguna.';
         default:
+          final rawMsg = (error.message ?? '').toLowerCase();
+          if (rawMsg.contains('package certificate hash') ||
+              rawMsg.contains('certificate') ||
+              rawMsg.contains('sha-1')) {
+            return 'Login Google membutuhkan APK bertanda tangan resmi (SHA-1 terdaftar di Firebase). Gunakan APK rilis atau masuk dengan Email & Kata Sandi.';
+          }
           return error.message ?? 'Terjadi kesalahan autentikasi (${error.code}).';
       }
     }
@@ -61,11 +73,49 @@ class FirebaseAuthRepository implements AuthRepository {
         return 'Koneksi internet bermasalah saat masuk dengan Google.';
       }
       if (msg.contains('10:') || msg.contains('sign_in_failed')) {
-        return 'Login Google gagal (Kode 10): pastikan SHA-1 perangkat/release sudah terdaftar di Firebase Console dan google-services.json telah diperbarui.';
+        return 'Gagal masuk dengan Google. Periksa koneksi internet dan coba lagi.';
       }
       return error.message ?? 'Gagal masuk dengan Google (${error.code}).';
     }
     return error.toString().replaceFirst('Exception: ', '');
+  }
+
+  /// Mendeteksi kegagalan native GoogleSignIn akibat ketidakcocokan SHA-1 (Kode 10 / 12500 / Play Services)
+  /// sehingga aplikasi dapat otomatis beralih ke Firebase OAuth Web Provider yang tidak bergantung SHA-1.
+  bool _shouldFallbackToWebGoogleSignIn(Object error) {
+    if (error is PlatformException) {
+      final msg = '${error.code} ${error.message ?? ''}'.toLowerCase();
+      if (msg.contains('sign_in_canceled') || msg.contains('canceled')) {
+        return false;
+      }
+      if (msg.contains('network_error') || msg.contains('7:')) {
+        return false;
+      }
+      return msg.contains('10:') ||
+          msg.contains('12500') ||
+          msg.contains('12502') ||
+          msg.contains('sign_in_failed') ||
+          msg.contains('developer_error') ||
+          msg.contains('apiexception');
+    }
+    return false;
+  }
+
+  /// Alur login Google berbasis Firebase Auth OAuth (Chrome Custom Tabs) —
+  /// berjalan di SEMUA perangkat, keystore debug perangkat manapun, maupun emulator
+  /// tanpa memerlukan pendaftaran SHA-1 perangkat pengembang.
+  Future<AppUser> _signInWithGoogleWebProvider() async {
+    final googleProvider = GoogleAuthProvider()
+      ..addScope('email')
+      ..addScope('profile')
+      ..setCustomParameters({'prompt': 'select_account'});
+
+    final userCredential = await _auth.signInWithProvider(googleProvider);
+    final user = userCredential.user;
+    if (user == null) {
+      throw Exception('Gagal mendapatkan data akun Google.');
+    }
+    return await _getOrFetchUserProfile(user);
   }
 
   AppUser _appUserFromDoc(User firebaseUser, Map<String, dynamic> data) {
@@ -141,7 +191,7 @@ class FirebaseAuthRepository implements AuthRepository {
     DocumentSnapshot<Map<String, dynamic>>? docSnapshot;
 
     try {
-      docSnapshot = await userDocRef.get().timeout(const Duration(seconds: 6));
+      docSnapshot = await userDocRef.get().timeout(const Duration(seconds: 4));
     } catch (_) {
       try {
         docSnapshot = await userDocRef.get(const GetOptions(source: Source.cache));
@@ -185,7 +235,7 @@ class FirebaseAuthRepository implements AuthRepository {
   }) async {
     final userDocRef = _firestore.collection('users').doc(uid);
     try {
-      final existing = await userDocRef.get().timeout(const Duration(seconds: 4));
+      final existing = await userDocRef.get().timeout(const Duration(seconds: 3));
       if (existing.exists && existing.data() != null) {
         return AppUser.fromJson({...existing.data()!, 'id': uid});
       }
@@ -204,7 +254,7 @@ class FirebaseAuthRepository implements AuthRepository {
       'reminderTimezone': 'Asia/Jakarta',
       'avatarUrl': avatarUrl,
       'isTrial': false,
-      'createdAt': FieldValue.serverTimestamp(),
+      'createdAt': Timestamp.fromDate(DateTime.now()),
     };
 
     // 1. Buat dokumen user
@@ -224,14 +274,14 @@ class FirebaseAuthRepository implements AuthRepository {
           'iconName': defCat.iconName,
           'colorHex': defCat.colorHex,
           'isDefault': true,
-          'createdAt': FieldValue.serverTimestamp(),
+          'createdAt': Timestamp.fromDate(defCat.createdAt),
         },
         SetOptions(merge: true),
       );
     }
 
     try {
-      await batch.commit().timeout(const Duration(seconds: 6));
+      await batch.commit().timeout(const Duration(seconds: 2));
     } catch (_) {}
 
     return AppUser(
@@ -270,6 +320,11 @@ class FirebaseAuthRepository implements AuthRepository {
       }
 
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      if (googleAuth.idToken == null && googleAuth.accessToken == null) {
+        debugPrint('GoogleSignIn token kosong, beralih ke Firebase OAuth Web Provider.');
+        return await _signInWithGoogleWebProvider();
+      }
+
       final OAuthCredential credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
@@ -279,6 +334,17 @@ class FirebaseAuthRepository implements AuthRepository {
       final user = userCredential.user!;
       return await _getOrFetchUserProfile(user);
     } catch (e) {
+      if (_shouldFallbackToWebGoogleSignIn(e)) {
+        debugPrint(
+          'Native GoogleSignIn gagal ($e), otomatis beralih ke Firebase OAuth Web Provider.',
+        );
+        try {
+          await _googleSignIn.signOut().catchError((_) => null);
+          return await _signInWithGoogleWebProvider();
+        } catch (webErr) {
+          throw Exception(_mapError(webErr));
+        }
+      }
       throw Exception(_mapError(e));
     }
   }
@@ -325,11 +391,14 @@ class FirebaseAuthRepository implements AuthRepository {
       final updates = <String, dynamic>{
         'id': user.uid,
         'email': user.email ?? '',
-        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedAt': Timestamp.fromDate(DateTime.now()),
       };
 
       if (name != null && name.trim().isNotEmpty) {
-        await user.updateDisplayName(name.trim());
+        // Jalankan updateDisplayName dengan timeout singkat agar tidak memblokir saat koneksi lambat
+        try {
+          await user.updateDisplayName(name.trim()).timeout(const Duration(seconds: 2));
+        } catch (_) {}
         updates['name'] = name.trim();
       }
       if (targetSavings != null) {
@@ -342,10 +411,15 @@ class FirebaseAuthRepository implements AuthRepository {
         updates['reminderTime'] = reminderTime;
       }
 
-      await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .set(updates, SetOptions(merge: true));
+      try {
+        await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .set(updates, SetOptions(merge: true))
+            .timeout(const Duration(milliseconds: 900));
+      } on TimeoutException {
+        // Tersimpan di cache lokal Firestore & akan disinkronkan otomatis ke cloud
+      }
     } catch (e) {
       throw Exception(_mapError(e));
     }

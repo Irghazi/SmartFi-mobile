@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/config/ai_config.dart';
+import '../../../core/services/spending_anomaly_detector.dart';
 import '../../../data/repositories/ai_repository.dart';
 import '../../../data/repositories/dummy/dummy_ai_repository.dart';
 import '../../../data/repositories/openai/openai_ai_repository.dart';
@@ -111,7 +113,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
     if (txsAsync.isLoading && _userId != 'guest') {
       try {
-        txs = await _ref.read(transactionRepositoryProvider).getTransactions(_userId);
+        txs = await _ref
+            .read(transactionRepositoryProvider)
+            .getTransactions(_userId)
+            .timeout(const Duration(seconds: 2));
       } catch (_) {}
     }
 
@@ -126,7 +131,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
     final incomeMonth = monthTxs.where((t) => t.isIncome).fold<int>(0, (sum, t) => sum + t.nominal);
     final expenseMonth = monthTxs.where((t) => t.isExpense).fold<int>(0, (sum, t) => sum + t.nominal);
-    final targetSavings = _ref.read(settingsProvider).savingsTarget;
+    final settings = _ref.read(settingsProvider);
+    final targetSavings = settings.savingsTarget;
+    final anomaly = SpendingAnomalyDetector.detect(
+      transactions: txs,
+      dailyLimit: settings.dailySpendingLimit,
+      now: now,
+    );
 
     // Hitung kategori terbesar
     final catTotals = <String, int>{};
@@ -160,6 +171,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
       'total_pengeluaran': expense,
       'pemasukan_bulan_ini': incomeMonth,
       'pengeluaran_bulan_ini': expenseMonth,
+      'pengeluaran_hari_ini': anomaly.todayExpense,
+      'rata_rata_pengeluaran_harian': anomaly.baselineDailyAverage,
+      'batas_pengeluaran_harian_kustom': settings.dailySpendingLimit,
+      'status_anomali_hari_ini': {
+        'is_anomali': anomaly.isAnomaly,
+        'tingkat': anomaly.severity.name,
+        'kategori_terbesar_hari_ini': anomaly.topCategoryToday,
+        'nominal_kategori_terbesar_hari_ini': anomaly.topCategoryAmountToday,
+        'pesan': anomaly.message,
+      },
       'target_tabungan_bulanan': targetSavings,
       'kategori_terbesar': topCategory,
       'nominal_kategori_terbesar': topAmount,
@@ -174,6 +195,25 @@ class ChatNotifier extends StateNotifier<ChatState> {
         .replaceFirst('HttpException: ', '')
         .replaceFirst('SocketException: ', '')
         .trim();
+  }
+
+  Future<String> _askOnlineWithTimeout({
+    required String message,
+    required List<ChatMessage> history,
+    required String financialContextJson,
+  }) async {
+    return _aiRepository
+        .askMentor(
+          message: message,
+          history: history,
+          financialContextJson: financialContextJson,
+        )
+        .timeout(
+          const Duration(seconds: 38),
+          onTimeout: () => throw TimeoutException(
+            'Permintaan ke server AI melebihi batas waktu. Periksa koneksi internetmu lalu ketuk Coba Lagi.',
+          ),
+        );
   }
 
   Future<void> sendMessage(String text) async {
@@ -200,7 +240,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
     try {
       final contextJson = await _buildFinancialContext();
-      final reply = await _aiRepository.askMentor(
+      final reply = await _askOnlineWithTimeout(
         message: trimmed,
         history: currentMessages,
         financialContextJson: contextJson,
@@ -263,7 +303,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
     try {
       final contextJson = await _buildFinancialContext();
-      final reply = await _aiRepository.askMentor(
+      final reply = await _askOnlineWithTimeout(
         message: userMsgText,
         history: truncatedList,
         financialContextJson: contextJson,

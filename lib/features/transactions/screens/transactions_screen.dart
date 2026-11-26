@@ -165,6 +165,12 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
             ],
           ),
           data: (allTransactions) {
+            final currentBalance = allTransactions
+                    .where((t) => t.isIncome)
+                    .fold<int>(0, (s, t) => s + t.nominal) -
+                allTransactions
+                    .where((t) => t.isExpense)
+                    .fold<int>(0, (s, t) => s + t.nominal);
             final now = DateTime.now();
             final searchQuery = _searchController.text.toLowerCase().trim();
             final filteredTxs = allTransactions.where((tx) {
@@ -264,6 +270,12 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                     if (userId == null) {
                       throw Exception('Sesi login tidak ditemukan.');
                     }
+                    if (type == 'expense' && nominal > currentBalance) {
+                      final safeBal = currentBalance < 0 ? 0 : currentBalance;
+                      throw Exception(
+                        'Saldo tidak mencukupi! Saldo terkini (${CurrencyFormatter.formatRupiah(safeBal)}) lebih kecil dari pengeluaran (${CurrencyFormatter.formatRupiah(nominal)}).',
+                      );
+                    }
                     final catList = (categories.isNotEmpty
                             ? categories
                             : CategoryModel.defaultCategories)
@@ -328,6 +340,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                                       context: context,
                                       userId: userId,
                                       categories: categories,
+                                      currentBalance: currentBalance,
                                       onSave: (tx) async {
                                         await ref.read(transactionsProvider.notifier).addTransaction(tx);
                                       },
@@ -459,6 +472,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                                         userId: userId,
                                         categories: categories,
                                         editingTx: tx,
+                                        currentBalance: currentBalance,
                                         onSave: (updatedTx) async {
                                           await ref.read(transactionsProvider.notifier).updateTransaction(updatedTx);
                                         },

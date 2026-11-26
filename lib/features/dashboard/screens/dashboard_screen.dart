@@ -5,11 +5,13 @@ import '../../../core/theme/neo_colors.dart';
 import '../../../data/models/transaction_model.dart';
 import '../../../shared/widgets/blueprint_background.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../main/main_screen.dart';
 import '../../transactions/providers/transaction_provider.dart';
 import '../widgets/category_pie_chart.dart';
 import '../widgets/expense_bar_chart.dart';
 import '../widgets/initial_balance_dialog.dart';
 import '../widgets/recent_transactions_list.dart';
+import '../widgets/spending_anomaly_banner.dart';
 import '../widgets/summary_cards.dart';
 import '../widgets/widget_2x2.dart';
 import '../../settings/providers/settings_provider.dart';
@@ -46,6 +48,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final transactionsAsync = ref.watch(transactionsProvider);
+    final dailyAnomaly = ref.watch(dailyAnomalyProvider);
 
     final textCol = NeoColors.text(context);
     final mutedCol = NeoColors.mutedText(context);
@@ -169,6 +172,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
+
+                // Banner Peringatan Anomali Pengeluaran Harian (jika terdeteksi)
+                if (dailyAnomaly.isAnomaly) ...[
+                  SpendingAnomalyBanner(
+                    anomaly: dailyAnomaly,
+                    onAskMentor: () {
+                      ref.read(mainTabIndexProvider.notifier).state = 2;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
 
                 // 3 Kartu Ringkasan (Saldo, Masuk, Keluar)
                 DashboardSummaryCards(
